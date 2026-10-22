@@ -1,6 +1,21 @@
-# ArtistArt
+# Encore
 
-A Lidarr plugin that keeps several images per artist in the artist's own folder and lets you choose which one to use from inside Lidarr.
+A Lidarr plugin that adds extras around your music library. Each feature can be turned on or off on its own.
+
+| Feature | Status | Turn on in |
+|---|---|---|
+| Artist Art: several images per artist, chosen inside Lidarr | Ready | Settings → Metadata → Artist Art |
+| Music videos: download and organize videos into artist folders | Planned | |
+
+## Install
+
+1. Use a Lidarr build that supports plugins (the `develop`/plugins branch).
+2. Go to **System → Plugins**, paste `https://github.com/noplexzone/Encore` and install. Restart Lidarr.
+3. New releases show up on the same page as updates.
+
+# Artist Art
+
+Keeps several images per artist in the artist's own folder and lets you choose which one to use from inside Lidarr.
 
 ![Picker](docs/2-picker.png)
 
@@ -14,12 +29,10 @@ A Lidarr plugin that keeps several images per artist in the artist's own folder 
 
 ![Artist page](docs/4-artist-page-after.png)
 
-## Install
+## Turning it on
 
-1. Use a Lidarr build that supports plugins (the `develop`/plugins branch).
-2. Go to **System → Plugins**, paste `https://github.com/noplexzone/ArtistArt` and install. Restart Lidarr.
-3. Go to **Settings → Metadata** and add **Artist Art**. Saving it turns the plugin on.
-4. Set **Settings → General → Application URL** (for example `http://lidarr.local:8686`) so the Artwork link on artist pages points to the right place. You can also set **Picker Address** in the plugin's advanced settings instead.
+1. Go to **Settings → Metadata** and add **Artist Art**. Saving it turns the feature on.
+2. Set **Settings → General → Application URL** (for example `http://lidarr.local:8686`) so the Artwork link on artist pages points to the right place. You can also set **Picker Address** in the feature's advanced settings instead.
 
 ## Using it
 
@@ -61,14 +74,14 @@ The selection is saved in `Artwork/artwork.json` inside the artist folder, so it
 - Lidarr's artist page only shows types its metadata already has. If Lidarr has no fanart for an artist, a chosen fanart is still written to the folder but won't appear in Lidarr.
 - The Artwork page is a separate page served by Lidarr, not a tab inside the artist page. Plugins can't add to Lidarr's built-in UI.
 
-## Building
+# Building
 
 ```sh
-git clone --recursive https://github.com/noplexzone/ArtistArt
-dotnet test tests/ArtistArt.Tests/ArtistArt.Tests.csproj -p:AssemblyVersion=0.1.0.0
-dotnet build src/ArtistArt/ArtistArt.csproj -c Release -p:Version=0.1.0 -p:AssemblyVersion=0.1.0.0 -o _output
+git clone --recursive https://github.com/noplexzone/Encore
+dotnet test tests/Encore.Tests/Encore.Tests.csproj -p:AssemblyVersion=0.1.0.0
+dotnet build src/Encore/Encore.csproj -c Release -p:Version=0.1.0 -p:AssemblyVersion=0.1.0.0 -o _output
 ```
 
 Pass `AssemblyVersion` on the command line, not in the project file. It has to apply to the Lidarr projects too, or the plugin binds to Lidarr.Core 10.0.0.x and won't load.
 
-Releases are built by GitHub Actions when a `v*` tag is pushed. The release asset is `ArtistArt.net8.0.zip`, which is what Lidarr's plugin installer looks for.
+Releases are built by GitHub Actions when a `v*` tag is pushed. The release asset is `Encore.net8.0.zip`, which is what Lidarr's plugin installer looks for.

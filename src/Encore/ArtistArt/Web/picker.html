@@ -86,7 +86,7 @@
 
   function request(method, path, body, isForm) {
     var options = { method: method, credentials: 'same-origin', headers: {} };
-    if (method !== 'GET') options.headers['X-ArtistArt'] = '1';
+    if (method !== 'GET') options.headers['X-Encore'] = '1';
     if (body && !isForm) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
     if (body && isForm) options.body = body;
     return fetch(base + '/api' + path, options).then(function (r) {

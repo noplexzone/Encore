@@ -32,25 +32,25 @@ jobs:
       # AssemblyVersion is passed globally so the Lidarr projects are built with the plugin's low version too.
       # Otherwise the plugin binds to Lidarr.Core 10.0.0.x and fails to load in a real Lidarr install.
       - name: Test
-        run: dotnet test tests/ArtistArt.Tests/ArtistArt.Tests.csproj -c Release -p:AssemblyVersion=${{ steps.version.outputs.version }}.0 -p:TreatWarningsAsErrors=false
+        run: dotnet test tests/Encore.Tests/Encore.Tests.csproj -c Release -p:AssemblyVersion=${{ steps.version.outputs.version }}.0 -p:TreatWarningsAsErrors=false
 
       - name: Build
         run: >
-          dotnet build src/ArtistArt/ArtistArt.csproj -c Release -o _output
+          dotnet build src/Encore/Encore.csproj -c Release -o _output
           -p:Version=${{ steps.version.outputs.version }}
           -p:AssemblyVersion=${{ steps.version.outputs.version }}.0
           -p:TreatWarningsAsErrors=false
 
       - name: Package
-        run: cd _output && zip ../ArtistArt.net8.0.zip Lidarr.Plugin.ArtistArt.dll
+        run: cd _output && zip ../Encore.net8.0.zip Lidarr.Plugin.Encore.dll
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ArtistArt.net8.0
-          path: ArtistArt.net8.0.zip
+          name: Encore.net8.0
+          path: Encore.net8.0.zip
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" ArtistArt.net8.0.zip --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" Encore.net8.0.zip --title "$GITHUB_REF_NAME" --generate-notes

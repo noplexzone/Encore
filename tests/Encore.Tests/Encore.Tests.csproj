@@ -13,7 +13,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ArtistArt\ArtistArt.csproj" />
+    <ProjectReference Include="..\..\src\Encore\Encore.csproj" />
     <ProjectReference Include="$(LidarrSrc)\NzbDrone.Common\Lidarr.Common.csproj" />
     <ProjectReference Include="$(LidarrSrc)\NzbDrone.Core\Lidarr.Core.csproj" />
   </ItemGroup>

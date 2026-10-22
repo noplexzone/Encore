@@ -1,20 +1,20 @@
-using ArtistArt.Art;
+using Encore.ArtistArt.Art;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Music;
 
-namespace ArtistArt.Http
+namespace Encore.ArtistArt.Http
 {
     /// <summary>
     /// The image picker. Uses Lidarr's "UI" policy, so it follows whatever login Lidarr's
-    /// own pages require. Changes need the X-ArtistArt header, which a cross-site form can't send.
+    /// own pages require. Changes need the X-Encore header, which a cross-site form can't send.
     /// </summary>
     [Authorize(Policy = "UI")]
     [Route("artwork")]
     public class ArtworkController : Controller
     {
-        private const string ChangeHeader = "X-ArtistArt";
+        private const string ChangeHeader = "X-Encore";
 
         private static readonly Dictionary<string, string> ContentTypes = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -39,7 +39,7 @@ namespace ArtistArt.Http
         [HttpGet("{artistId:int}")]
         public IActionResult Page()
         {
-            using var stream = typeof(ArtworkController).Assembly.GetManifestResourceStream("ArtistArt.picker.html")!;
+            using var stream = typeof(ArtworkController).Assembly.GetManifestResourceStream("Encore.ArtistArt.picker.html")!;
             using var reader = new StreamReader(stream);
             return Content(reader.ReadToEnd(), "text/html; charset=utf-8");
         }

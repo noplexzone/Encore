@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace ArtistArt.Http
+namespace Encore.ArtistArt.Http
 {
     /// <summary>
     /// Lidarr only registers controllers from its own assemblies. Lidarr's container does pick up

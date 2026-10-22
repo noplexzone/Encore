@@ -3,7 +3,7 @@ using NzbDrone.Core.Annotations;
 using NzbDrone.Core.ThingiProvider;
 using NzbDrone.Core.Validation;
 
-namespace ArtistArt
+namespace Encore.ArtistArt
 {
     public class ArtistArtSettingsValidator : AbstractValidator<ArtistArtSettings>
     {

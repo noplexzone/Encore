@@ -1,4 +1,4 @@
-namespace ArtistArt.Art
+namespace Encore.ArtistArt.Art
 {
     /// <summary>
     /// Saved in the candidate folder as artwork.json. Records which candidate is chosen

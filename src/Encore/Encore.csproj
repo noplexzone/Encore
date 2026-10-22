@@ -3,8 +3,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>Lidarr.Plugin.ArtistArt</AssemblyName>
-    <RootNamespace>ArtistArt</RootNamespace>
+    <AssemblyName>Lidarr.Plugin.Encore</AssemblyName>
+    <RootNamespace>Encore</RootNamespace>
     <Version Condition="'$(Version)' == ''">0.1.0</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
@@ -28,6 +28,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Web\picker.html" LogicalName="ArtistArt.picker.html" />
+    <EmbeddedResource Include="ArtistArt\Web\picker.html" LogicalName="Encore.ArtistArt.picker.html" />
   </ItemGroup>
 </Project>

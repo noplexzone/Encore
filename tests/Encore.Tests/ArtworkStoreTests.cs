@@ -1,5 +1,5 @@
-using ArtistArt;
-using ArtistArt.Art;
+using Encore.ArtistArt;
+using Encore.ArtistArt.Art;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Datastore;
@@ -7,7 +7,7 @@ using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Music;
 using Xunit;
 
-namespace ArtistArt.Tests
+namespace Encore.Tests
 {
     public sealed class ArtworkStoreTests : IDisposable
     {

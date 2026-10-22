@@ -1,4 +1,4 @@
-using ArtistArt.Art;
+using Encore.ArtistArt.Art;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Configuration;
@@ -10,7 +10,7 @@ using NzbDrone.Core.Music;
 using NzbDrone.Core.Music.Events;
 using NzbDrone.Core.ThingiProvider.Events;
 
-namespace ArtistArt
+namespace Encore.ArtistArt
 {
     public interface IArtistArtService
     {

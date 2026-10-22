@@ -4,7 +4,7 @@ using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Music;
 using NzbDrone.Core.ThingiProvider;
 
-namespace ArtistArt
+namespace Encore.ArtistArt
 {
     /// <summary>
     /// Shows up under Settings > Metadata. Enabling it turns the plugin on; it writes

@@ -5,7 +5,7 @@ using NzbDrone.Common.Extensions;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Music;
 
-namespace ArtistArt.Art
+namespace Encore.ArtistArt.Art
 {
     public record Candidate(string File, long Size, DateTime Modified, bool FromLidarr);
 

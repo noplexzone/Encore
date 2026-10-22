@@ -1,6 +1,6 @@
 using NzbDrone.Core.MediaCover;
 
-namespace ArtistArt.Art
+namespace Encore.ArtistArt.Art
 {
     /// <summary>
     /// One kind of artist image (poster, fanart, ...): how candidates are named,
