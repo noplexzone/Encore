@@ -1,0 +1,7 @@
+bin/
+obj/
+_output/
+*.user
+.vs/
+.idea/
+TestResults/

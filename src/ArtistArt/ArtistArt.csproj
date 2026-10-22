@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Lidarr.Plugin.ArtistArt</AssemblyName>
+    <RootNamespace>ArtistArt</RootNamespace>
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NuGetAudit>false</NuGetAudit>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- Path to a Lidarr source checkout (the submodule by default) -->
+    <LidarrSrc Condition="'$(LidarrSrc)' == ''">$(MSBuildThisFileDirectory)..\..\Submodules\Lidarr\src</LidarrSrc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Lidarr assemblies are provided by Lidarr at runtime, so none of them are copied into the plugin -->
+  <ItemGroup>
+    <ProjectReference Include="$(LidarrSrc)\NzbDrone.Common\Lidarr.Common.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="$(LidarrSrc)\NzbDrone.Core\Lidarr.Core.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="$(LidarrSrc)\Lidarr.Http\Lidarr.Http.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Web\picker.html" LogicalName="ArtistArt.picker.html" />
+  </ItemGroup>
+</Project>

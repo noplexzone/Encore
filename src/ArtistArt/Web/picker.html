@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artwork</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --panel: #fff; --text: #333; --muted: #777; --border: #e5e5e5;
+    --accent: #00a65b; --danger: #f05050; --hover: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #202020; --panel: #2a2a2a; --text: #ccc; --muted: #888; --border: #3a3a3a; --hover: #333; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: #1d563d; color: #fff; }
+  header a { color: #fff; text-decoration: none; opacity: .85; }
+  header a:hover { opacity: 1; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; flex: 1; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; }
+  .panel h2 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: center; gap: 12px; }
+  .panel h2 .spacer { flex: 1; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; word-break: break-all; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .wide .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { position: relative; border: 2px solid var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--hover); }
+  .card:hover { border-color: var(--muted); }
+  .card.active { border-color: var(--accent); }
+  .card img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+  .wide .card img { aspect-ratio: 16 / 9; }
+  .logo .card img { object-fit: contain; padding: 8px; }
+  .card .name { padding: 4px 8px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { position: absolute; top: 6px; left: 6px; background: var(--accent); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+  .badge.lidarr { left: auto; right: 6px; background: #5d9cec; }
+  .delete { position: absolute; bottom: 30px; right: 6px; border: 0; border-radius: 3px; background: var(--danger); color: #fff; font-size: 11px; padding: 1px 6px; cursor: pointer; display: none; }
+  .card:hover .delete { display: block; }
+  button.action, label.action { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 4px; padding: 4px 10px; font-size: 13px; cursor: pointer; font-weight: 400; }
+  button.action:hover, label.action:hover { background: var(--hover); }
+  .empty { color: var(--muted); font-size: 13px; }
+  #search { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); color: var(--text); margin-bottom: 12px; font-size: 14px; }
+  .artists a { display: block; padding: 6px 4px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
+  .artists a:hover { background: var(--hover); }
+  #toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 14px; border-radius: 4px; color: #fff; display: none; max-width: 360px; }
+  #toast.error { background: var(--danger); }
+  #toast.ok { background: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Artwork</h1>
+  <a id="back" href="#" hidden>Back to artist</a>
+  <a id="all" href="#">All artists</a>
+</header>
+<main id="main"><p class="empty">Loading…</p></main>
+<div id="toast"></div>
+<script>
+(function () {
+  var match = location.pathname.match(/^(.*\/artwork)(?:\/(\d+))?\/?$/i);
+  var base = match ? match[1] : '/artwork';
+  var urlBase = base.replace(/\/artwork$/i, '');
+  var artistId = match && match[2] ? Number(match[2]) : null;
+  var main = document.getElementById('main');
+  document.getElementById('all').href = base;
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'text') node.textContent = attrs[k];
+      else if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+
+  function toast(message, kind) {
+    var t = document.getElementById('toast');
+    t.textContent = message;
+    t.className = kind || 'ok';
+    t.style.display = 'block';
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { t.style.display = 'none'; }, 4000);
+  }
+
+  function request(method, path, body, isForm) {
+    var options = { method: method, credentials: 'same-origin', headers: {} };
+    if (method !== 'GET') options.headers['X-ArtistArt'] = '1';
+    if (body && !isForm) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
+    if (body && isForm) options.body = body;
+    return fetch(base + '/api' + path, options).then(function (r) {
+      if (r.ok) return r.json();
+      return r.text().then(function (text) {
+        var message = text;
+        try { message = JSON.parse(text).detail || text; } catch (e) {}
+        throw new Error(message || ('Request failed: ' + r.status));
+      });
+    });
+  }
+
+  function showArtists() {
+    document.getElementById('title').textContent = 'Artwork';
+    request('GET', '/artists').then(function (artists) {
+      var list = el('div', { 'class': 'artists' });
+      var search = el('input', { id: 'search', placeholder: 'Filter artists', autofocus: '' });
+      function render() {
+        var q = search.value.toLowerCase();
+        list.innerHTML = '';
+        artists.filter(function (a) { return a.name.toLowerCase().indexOf(q) !== -1; }).forEach(function (a) {
+          list.appendChild(el('a', { href: base + '/' + a.id, text: a.name }));
+        });
+      }
+      search.addEventListener('input', render);
+      render();
+      main.innerHTML = '';
+      main.appendChild(el('div', { 'class': 'panel' }, [search, list]));
+    }).catch(function (e) { main.innerHTML = ''; main.appendChild(el('p', { 'class': 'empty', text: e.message })); });
+  }
+
+  function showArtist(data) {
+    document.title = data.name + ' - Artwork';
+    document.getElementById('title').textContent = data.name;
+    var back = document.getElementById('back');
+    back.href = urlBase + '/artist/' + data.foreignArtistId;
+    back.hidden = false;
+    main.innerHTML = '';
+
+    if (!data.folderExists) {
+      main.appendChild(el('p', { 'class': 'empty', text: 'This artist has no folder yet. Images can be chosen once Lidarr creates it.' }));
+      return;
+    }
+
+    data.types.forEach(function (type) {
+      var grid = el('div', { 'class': 'grid' });
+
+      type.candidates.forEach(function (c) {
+        var active = c.file === type.selected;
+        var src = base + '/api/' + data.id + '/image/' + type.key + '/' + encodeURIComponent(c.file) + '?v=' + encodeURIComponent(c.modified);
+        var card = el('div', { 'class': 'card' + (active ? ' active' : ''), title: active ? 'In use' : 'Use this image' }, [
+          el('img', { src: src, alt: c.file, loading: 'lazy' }),
+          el('div', { 'class': 'name', text: c.file }),
+          active ? el('span', { 'class': 'badge', text: 'In use' }) : null,
+          c.fromLidarr ? el('span', { 'class': 'badge lidarr', text: 'Lidarr' }) : null,
+          active ? null : el('button', { 'class': 'delete', text: 'Delete', onclick: function (e) {
+            e.stopPropagation();
+            if (!confirm('Delete ' + c.file + ' from the artist folder?')) return;
+            request('POST', '/' + data.id + '/delete', { type: type.key, file: c.file }).then(showArtist).catch(function (err) { toast(err.message, 'error'); });
+          } })
+        ]);
+        if (!active) {
+          card.addEventListener('click', function () {
+            request('POST', '/' + data.id + '/select', { type: type.key, file: c.file })
+              .then(function (d) { showArtist(d); toast(type.label + ' updated'); })
+              .catch(function (err) { toast(err.message, 'error'); });
+          });
+        }
+        grid.appendChild(card);
+      });
+
+      var input = el('input', { type: 'file', accept: '.jpg,.jpeg,.png,.webp', hidden: '' });
+      input.addEventListener('change', function () {
+        if (!input.files.length) return;
+        var form = new FormData();
+        form.append('file', input.files[0]);
+        request('POST', '/' + data.id + '/upload/' + type.key, form, true)
+          .then(function (d) { showArtist(d); toast('Image added'); })
+          .catch(function (err) { toast(err.message, 'error'); });
+      });
+
+      var heading = el('h2', {}, [
+        el('span', { text: type.label }),
+        el('span', { 'class': 'spacer' }),
+        type.selected ? el('button', { 'class': 'action', text: "Use Lidarr's image", onclick: function () {
+          request('POST', '/' + data.id + '/reset', { type: type.key })
+            .then(function (d) { showArtist(d); toast(type.label + ' reset'); })
+            .catch(function (err) { toast(err.message, 'error'); });
+        } }) : null,
+        el('label', { 'class': 'action' }, [document.createTextNode('Add image'), input])
+      ]);
+
+      var hint = el('p', { 'class': 'hint', text: type.candidates.length
+        ? (type.selected ? '' : "Lidarr's own image is in use. Click an image to use it instead.")
+        : 'No images yet. Add one, or put files named ' + type.key + '-something.jpg in ' + data.folder });
+
+      var section = el('section', { 'class': 'panel' + (type.key === 'fanart' || type.key === 'banner' ? ' wide' : '') + (type.key === 'logo' ? ' logo' : '') },
+        [heading, hint, type.candidates.length ? grid : null]);
+      main.appendChild(section);
+    });
+  }
+
+  if (artistId) {
+    request('GET', '/' + artistId).then(showArtist).catch(function (e) {
+      main.innerHTML = '';
+      main.appendChild(el('p', { 'class': 'empty', text: e.message }));
+    });
+  } else {
+    showArtists();
+  }
+})();
+</script>
+</body>
+</html>
