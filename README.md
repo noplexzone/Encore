@@ -84,4 +84,4 @@ dotnet build src/Encore/Encore.csproj -c Release -p:Version=0.1.0 -p:AssemblyVer
 
 Pass `AssemblyVersion` on the command line, not in the project file. It has to apply to the Lidarr projects too, or the plugin binds to Lidarr.Core 10.0.0.x and won't load.
 
-Releases are built by GitHub Actions when a `v*` tag is pushed. The release asset is `Encore.net8.0.zip`, which is what Lidarr's plugin installer looks for.
+Releases are built by GitHub Actions, either when a `v*` tag is pushed or by running the Build workflow by hand with a version number (Actions → Build → Run workflow). The release asset is `Encore.net8.0.zip`, which is what Lidarr's plugin installer looks for.
