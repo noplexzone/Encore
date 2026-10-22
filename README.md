@@ -5,7 +5,7 @@ A Lidarr plugin that adds extras around your music library. Each feature can be 
 | Feature | Status | Turn on in |
 |---|---|---|
 | Artist Art: several images per artist, chosen inside Lidarr | Ready | Settings → Metadata → Artist Art |
-| Music videos: download and organize videos into artist folders | Planned | |
+| Music Videos: find, download and organize music videos into artist folders | Ready | Settings → Metadata → Music Videos |
 
 ## Install
 
@@ -73,6 +73,64 @@ The selection is saved in `Artwork/artwork.json` inside the artist folder, so it
 - After a metadata refresh, Lidarr briefly shows its own image again before the plugin puts yours back (usually under a second).
 - Lidarr's artist page only shows types its metadata already has. If Lidarr has no fanart for an artist, a chosen fanart is still written to the folder but won't appear in Lidarr.
 - The Artwork page is a separate page served by Lidarr, not a tab inside the artist page. Plugins can't add to Lidarr's built-in UI.
+
+# Music Videos
+
+Finds each artist's official music videos and downloads them, in the best quality available, into the artist's folder as separate video files with their own audio.
+
+## What it does
+
+- **Finds videos** in three places, best first:
+  1. Recordings that MusicBrainz marks as videos and links to YouTube (or Vimeo, Dailymotion).
+  2. A YouTube search for MusicBrainz videos that have no link yet.
+  3. The uploads of the artist's YouTube channels that MusicBrainz knows about (their own channel and their VEVO channel), keeping only titles that say they are official videos.
+- **Downloads** with [yt-dlp](https://github.com/yt-dlp/yt-dlp), taking the best video and the best audio stream separately and joining them with ffmpeg. On YouTube that usually means 4K or 1440p AV1/VP9 when the video has it, and Opus audio.
+- **Saves** `Music Videos/<Artist> - <Title>.mkv` in the artist folder, with `<name>-thumb.jpg` and a Kodi-style `<name>.nfo` that Jellyfin, Emby and Kodi read. Files are always `.mkv` or `.mp4`, never `.webm`: Navidrome treats `.webm` and `.mka` as songs, but ignores `.mkv` and `.mp4`. Lidarr ignores them too.
+- **Keeps track** in `musicvideos.json` in the video folder, so ignored and downloaded videos survive a Lidarr reinstall.
+- Each artist is searched when it is added and again every 7 days. Videos already found are never offered twice, even from another channel.
+
+## Turning it on
+
+1. Go to **Settings → Metadata** and enable **Music Videos**. Saving it turns the feature on and starts the first searches a couple of minutes later.
+2. Encore downloads yt-dlp (and keeps it updated daily), ffmpeg if there isn't one on the system, and deno, a JavaScript runtime YouTube now needs for its full format list. They go in `<Lidarr data folder>/Encore/bin`.
+   - On Alpine-based Docker images (for example linuxserver/lidarr), deno has no build, so install a runtime once: `apk add nodejs` (or `deno` if your Alpine has it). Without one, YouTube may only offer low quality formats, and the Videos page says so.
+3. Set **Settings → General → Application URL** so the Videos link on artist pages points to the right place.
+
+## Using it
+
+Open an artist and click **Videos** under Links, or go to `http://<lidarr>/videos`.
+
+- **Search now** looks for new videos straight away.
+- Found videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
+- **Ignore** stops a video from being downloaded. **Delete** removes the file and ignores it.
+- **Add** takes a video address (downloaded whatever its title says) or a channel or playlist address (scanned now and on every search).
+- **Play** plays a downloaded video in the browser, if the browser supports its codecs.
+
+## Settings
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Video Folder | `Music Videos` | Subfolder of the artist folder. Empty puts videos straight in the artist folder |
+| File Name | `{Artist Name} - {Track Title}` | Also `{Video Type}` and `{Year}`. For Plex local music videos use an empty folder and `{Track Title}-video` |
+| Container | MKV | MKV holds every codec. MP4 also works with AV1/VP9 and Opus but some players are pickier |
+| Codecs | Best quality | Most compatible prefers H.264 and AAC, which on YouTube usually means 1080p at most |
+| Max Resolution | No limit | Caps the download, for example at 1080p |
+| Download Automatically | on | Download found videos straight away |
+| Live Videos / Lyric Videos | off | Also get live performances / lyric videos |
+| Only Tracks in Library | off | Only videos for songs on albums in Lidarr |
+| Write NFO / Save Thumbnail | on | Files for Kodi, Jellyfin and Emby |
+| Videos Link | on | Add a Videos link to each artist's Links |
+| Search Every (days) (advanced) | 7 | How often each artist is searched again |
+| Cookies File (advanced) | empty | A `cookies.txt` from a signed-in YouTube account. Premium accounts get higher bitrate 1080p formats, and age-restricted videos work |
+| yt-dlp Path / FFmpeg Path (advanced) | empty | Use your own copies instead of Encore's |
+| Extra yt-dlp Arguments (advanced) | empty | Added to every download, for example `--limit-rate 5M` |
+| Link Address (advanced) | empty | Overrides Application URL for the Videos link |
+
+## Known limits
+
+- Only one search or download runs at a time, so the first pass over a big library takes a while.
+- YouTube's best audio is Opus at about 130 kbps (or 256 kbps AAC/Opus for some Premium formats with cookies). Better copies, such as Blu-ray rips, are not looked for yet.
+- MusicBrainz is asked about at most 60 new video recordings per artist per search, to stay within its rate limit. The rest are picked up by later searches.
 
 # Building
 
