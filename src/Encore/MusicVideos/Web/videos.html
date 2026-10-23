@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Videos</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --panel: #fff; --text: #333; --muted: #777; --border: #e5e5e5;
+    --accent: #00a65b; --danger: #f05050; --hover: #fafafa; --info: #5d9cec; --warn: #e8a33d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #202020; --panel: #2a2a2a; --text: #ccc; --muted: #888; --border: #3a3a3a; --hover: #333; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: #1d563d; color: #fff; }
+  header a { color: #fff; text-decoration: none; opacity: .85; }
+  header a:hover { opacity: 1; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; flex: 1; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; }
+  .panel h2 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .panel h2 .spacer { flex: 1; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; word-break: break-all; }
+  button.action { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 4px; padding: 4px 10px; font-size: 13px; cursor: pointer; font-weight: 400; }
+  button.action:hover { background: var(--hover); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent); opacity: .9; }
+  .empty { color: var(--muted); font-size: 13px; }
+  input.text { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); color: var(--text); font-size: 14px; }
+  #search { width: 100%; margin-bottom: 12px; }
+  .artists a { display: flex; gap: 12px; padding: 6px 4px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
+  .artists a:hover { background: var(--hover); }
+  .artists .name { flex: 1; }
+  .count { color: var(--muted); font-size: 12px; }
+  .status { position: sticky; top: 0; z-index: 1; padding: 8px 20px; background: var(--info); color: #fff; font-size: 13px; display: none; }
+  .status.problem { background: var(--warn); }
+  .add { display: flex; gap: 8px; margin-top: 12px; }
+  .add input { flex: 1; }
+  .video { display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--border); align-items: flex-start; }
+  .video:first-of-type { border-top: 0; }
+  .thumb { width: 160px; flex: none; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: var(--hover); }
+  .info { flex: 1; min-width: 0; }
+  .title { font-weight: 600; }
+  .title a { color: inherit; text-decoration: none; }
+  .title a:hover { text-decoration: underline; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .error { color: var(--danger); font-size: 12px; white-space: pre-wrap; }
+  .badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 3px; color: #fff; background: var(--muted); margin-right: 4px; vertical-align: 1px; }
+  .badge.Downloaded { background: var(--accent); }
+  .badge.Failed { background: var(--danger); }
+  .badge.Wanted, .badge.Queued { background: var(--info); }
+  .buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
+  .ignored { opacity: .6; }
+  video { width: 100%; max-height: 70vh; background: #000; border-radius: 4px; margin-top: 8px; }
+  #toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 14px; border-radius: 4px; color: #fff; display: none; max-width: 360px; }
+  #toast.error { background: var(--danger); }
+  #toast.ok { background: var(--accent); }
+  @media (max-width: 640px) {
+    main { padding: 12px; }
+    .video { flex-wrap: wrap; }
+    .thumb { width: 100%; }
+    .buttons { justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Music Videos</h1>
+  <a id="back" href="#" hidden>Back to artist</a>
+  <a id="all" href="#">All artists</a>
+</header>
+<div id="status" class="status"></div>
+<main id="main"><p class="empty">Loading…</p></main>
+<div id="toast"></div>
+<script>
+(function () {
+  var match = location.pathname.match(/^(.*\/videos)(?:\/(\d+))?\/?$/i);
+  var base = match ? match[1] : '/videos';
+  var urlBase = base.replace(/\/videos$/i, '');
+  var artistId = match && match[2] ? Number(match[2]) : null;
+  var main = document.getElementById('main');
+  var lastActivity = null;
+  document.getElementById('all').href = base;
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'text') node.textContent = attrs[k];
+      else if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+
+  function toast(message, kind) {
+    var t = document.getElementById('toast');
+    t.textContent = message;
+    t.className = kind || 'ok';
+    t.style.display = 'block';
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { t.style.display = 'none'; }, 4000);
+  }
+
+  function request(method, path, body) {
+    var options = { method: method, credentials: 'same-origin', headers: {} };
+    if (method !== 'GET') options.headers['X-Encore'] = '1';
+    if (body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
+    return fetch(base + '/api' + path, options).then(function (r) {
+      if (r.ok) return r.json();
+      return r.text().then(function (text) {
+        var message = text;
+        try { message = JSON.parse(text).detail || text; } catch (e) {}
+        throw new Error(message || ('Request failed: ' + r.status));
+      });
+    });
+  }
+
+  function fail(e) {
+    main.innerHTML = '';
+    main.appendChild(el('p', { 'class': 'empty', text: e.message }));
+  }
+
+  function duration(seconds) {
+    if (!seconds) return '';
+    var m = Math.floor(seconds / 60), s = seconds % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function size(bytes) {
+    if (!bytes) return '';
+    return bytes > 1073741824 ? (bytes / 1073741824).toFixed(2) + ' GB' : Math.round(bytes / 1048576) + ' MB';
+  }
+
+  function pollStatus() {
+    request('GET', '/status').then(function (s) {
+      var bar = document.getElementById('status');
+      var text = s.activity ? s.activity + (s.progress ? ' · ' + s.progress : '') : '';
+      if (s.queued > 1) text += (text ? ' · ' : '') + (s.queued - 1) + ' more queued';
+      var problem = s.toolProblem || s.lastError;
+      if (!text && problem) { text = problem; bar.className = 'status problem'; } else bar.className = 'status';
+      bar.textContent = text;
+      bar.style.display = text ? 'block' : 'none';
+
+      // Refresh the artist when a job for it finishes
+      if (artistId && lastActivity && lastActivity !== s.activity) load();
+      lastActivity = s.activity;
+    }).catch(function () {}).then(function () { setTimeout(pollStatus, 3000); });
+  }
+
+  function showArtists() {
+    document.getElementById('title').textContent = 'Music Videos';
+    request('GET', '/artists').then(function (artists) {
+      var list = el('div', { 'class': 'artists' });
+      var search = el('input', { id: 'search', 'class': 'text', placeholder: 'Filter artists', autofocus: '' });
+      function render() {
+        var q = search.value.toLowerCase();
+        list.innerHTML = '';
+        artists.filter(function (a) { return a.name.toLowerCase().indexOf(q) !== -1; }).forEach(function (a) {
+          var counts = [];
+          if (a.downloaded) counts.push(a.downloaded + ' downloaded');
+          if (a.wanted) counts.push(a.wanted + ' to get');
+          list.appendChild(el('a', { href: base + '/' + a.id }, [
+            el('span', { 'class': 'name', text: a.name }),
+            el('span', { 'class': 'count', text: counts.join(' · ') })
+          ]));
+        });
+      }
+      search.addEventListener('input', render);
+      render();
+      main.innerHTML = '';
+      main.appendChild(el('div', { 'class': 'panel' }, [search, list]));
+    }).catch(fail);
+  }
+
+  function act(path, body, message) {
+    return request('POST', '/' + artistId + path, body).then(function (d) { showArtist(d); if (message) toast(message); })
+      .catch(function (err) { toast(err.message, 'error'); });
+  }
+
+  function videoRow(data, v) {
+    var status = v.queued ? 'Queued' : v.status;
+    var buttons = [];
+    var player = null;
+
+    if (v.status === 'Downloaded') {
+      buttons.push(el('button', { 'class': 'action', text: 'Play', onclick: function () {
+        if (player.firstChild) { player.innerHTML = ''; return; }
+        player.appendChild(el('video', { src: base + '/api/' + data.id + '/file?key=' + encodeURIComponent(v.key), controls: '', autoplay: '' }));
+      } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Download again', onclick: function () { act('/download', { key: v.key }, 'Queued'); } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Delete', onclick: function () {
+        if (confirm('Delete ' + v.file + ' and stop getting this video?')) act('/delete', { key: v.key }, 'Deleted');
+      } }));
+    } else if (v.status === 'Ignored') {
+      buttons.push(el('button', { 'class': 'action', text: 'Want', onclick: function () { act('/want', { key: v.key }); } }));
+    } else {
+      if (!v.queued) buttons.push(el('button', { 'class': 'action primary', text: v.status === 'Failed' ? 'Retry' : 'Download', onclick: function () { act('/download', { key: v.key }, 'Queued'); } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Ignore', onclick: function () { act('/ignore', { key: v.key }); } }));
+    }
+
+    var meta = [v.kindLabel, v.source, duration(v.duration), v.year, v.quality, size(v.size)].filter(Boolean).join(' · ');
+    player = el('div');
+
+    return el('div', { 'class': 'video' + (v.status === 'Ignored' ? ' ignored' : '') }, [
+      v.thumbnail ? el('img', { 'class': 'thumb', src: v.thumbnail, alt: '', loading: 'lazy' }) : el('div', { 'class': 'thumb' }),
+      el('div', { 'class': 'info' }, [
+        el('div', { 'class': 'title' }, [el('span', { 'class': 'badge ' + status, text: status }), el('a', { href: v.url, target: '_blank', rel: 'noopener', text: v.title })]),
+        v.sourceTitle && v.sourceTitle !== v.title ? el('div', { 'class': 'meta', text: v.sourceTitle }) : null,
+        el('div', { 'class': 'meta', text: meta }),
+        v.file ? el('div', { 'class': 'meta', text: v.file }) : null,
+        v.error ? el('div', { 'class': 'error', text: v.error }) : null,
+        player
+      ]),
+      el('div', { 'class': 'buttons' }, buttons)
+    ]);
+  }
+
+  function showArtist(data) {
+    document.title = data.name + ' - Music Videos';
+    document.getElementById('title').textContent = data.name;
+    var back = document.getElementById('back');
+    back.href = urlBase + '/artist/' + data.foreignArtistId;
+    back.hidden = false;
+    main.innerHTML = '';
+
+    if (!data.folderExists) {
+      main.appendChild(el('p', { 'class': 'empty', text: 'This artist has no folder yet. Videos are looked for once Lidarr creates it.' }));
+      return;
+    }
+
+    var wanted = data.videos.filter(function (v) { return v.status === 'Wanted' || v.status === 'Failed'; });
+    var url = el('input', { 'class': 'text', placeholder: 'Add a YouTube (or other) video, channel or playlist address' });
+    var add = el('form', { 'class': 'add' }, [url, el('button', { 'class': 'action', type: 'submit', text: 'Add' })]);
+    add.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!url.value.trim()) return;
+      act('/add', { url: url.value.trim() }, 'Added. It shows up here once it has been read.');
+    });
+
+    main.appendChild(el('section', { 'class': 'panel' }, [
+      el('h2', {}, [
+        el('span', { text: 'Videos' }),
+        el('span', { 'class': 'spacer' }),
+        wanted.length ? el('button', { 'class': 'action', text: 'Download all (' + wanted.length + ')', onclick: function () { act('/download-all', null, 'Queued'); } }) : null,
+        el('button', { 'class': 'action', text: data.searching ? 'Searching…' : 'Search now', onclick: function () { act('/search', null, 'Searching for videos'); } })
+      ]),
+      el('p', { 'class': 'hint', text: 'Saved in ' + data.folder + '. ' + (data.lastSearch ? 'Last searched ' + new Date(data.lastSearch).toLocaleString() + '.' : 'Not searched yet.') +
+        (data.extraSources.length ? ' Also scanning: ' + data.extraSources.join(', ') : '') }),
+      add
+    ]));
+
+    var groups = [
+      { label: 'Found', items: data.videos.filter(function (v) { return v.status === 'Wanted' || v.status === 'Failed'; }) },
+      { label: 'Downloaded', items: data.videos.filter(function (v) { return v.status === 'Downloaded'; }) },
+      { label: 'Ignored', items: data.videos.filter(function (v) { return v.status === 'Ignored'; }) }
+    ];
+
+    groups.forEach(function (g) {
+      if (!g.items.length) return;
+      main.appendChild(el('section', { 'class': 'panel' }, [el('h2', { text: g.label + ' (' + g.items.length + ')' })]
+        .concat(g.items.map(function (v) { return videoRow(data, v); }))));
+    });
+
+    if (!data.videos.length) {
+      main.appendChild(el('p', { 'class': 'empty', text: data.searching ? 'Searching…' : 'No videos yet. Click Search now, or add one by address.' }));
+    }
+  }
+
+  function load() {
+    if (artistId) request('GET', '/' + artistId).then(showArtist).catch(fail);
+    else showArtists();
+  }
+
+  load();
+  pollStatus();
+})();
+</script>
+</body>
+</html>

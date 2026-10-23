@@ -1,7 +1,7 @@
 using Encore.ArtistArt.Art;
+using Encore.Common;
 using NLog;
 using NzbDrone.Common.Extensions;
-using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Extras.Metadata;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.MediaCover;
@@ -30,24 +30,21 @@ namespace Encore.ArtistArt
         private readonly IMetadataFactory _metadataFactory;
         private readonly IArtworkStore _store;
         private readonly IArtistService _artistService;
-        private readonly IArtistMetadataRepository _artistMetadataRepository;
-        private readonly IConfigService _configService;
+        private readonly IArtistLinks _links;
         private readonly IEventAggregator _eventAggregator;
         private readonly Logger _logger;
 
         public ArtistArtService(IMetadataFactory metadataFactory,
                                 IArtworkStore store,
                                 IArtistService artistService,
-                                IArtistMetadataRepository artistMetadataRepository,
-                                IConfigService configService,
+                                IArtistLinks links,
                                 IEventAggregator eventAggregator,
                                 Logger logger)
         {
             _metadataFactory = metadataFactory;
             _store = store;
             _artistService = artistService;
-            _artistMetadataRepository = artistMetadataRepository;
-            _configService = configService;
+            _links = links;
             _eventAggregator = eventAggregator;
             _logger = logger;
         }
@@ -125,31 +122,14 @@ namespace Encore.ArtistArt
 
         private void EnsureLink(Artist artist, ArtistArtSettings? settings)
         {
-            var baseUrl = PickerBaseUrl(settings);
+            var baseUrl = _links.BaseUrl(settings?.PickerBaseUrl);
 
             if (settings == null || !settings.AddArtistLink || baseUrl == null)
             {
                 return;
             }
 
-            try
-            {
-                var metadata = artist.Metadata.Value;
-                var url = $"{baseUrl}/artwork/{artist.Id}";
-
-                if (metadata.Links.Any(l => l.Name == LinkName && l.Url == url))
-                {
-                    return;
-                }
-
-                // A metadata refresh replaces the links, so this runs again after every refresh
-                metadata.Links = metadata.Links.Where(l => l.Name != LinkName).Append(new Links { Name = LinkName, Url = url }).ToList();
-                _artistMetadataRepository.Update(metadata);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Couldn't add the Artwork link for {0}", artist);
-            }
+            _links.Ensure(artist, LinkName, $"{baseUrl}/artwork/{artist.Id}");
         }
 
         private void RefreshLidarrCovers(Artist artist, ArtistArtSettings settings)
@@ -158,18 +138,6 @@ namespace Encore.ArtistArt
 
             // Lidarr pushes the new cover to open browsers when it sees this event
             _eventAggregator.PublishEvent(new MediaCoversUpdatedEvent(artist, true));
-        }
-
-        private string? PickerBaseUrl(ArtistArtSettings? settings)
-        {
-            var url = settings?.PickerBaseUrl;
-
-            if (url.IsNullOrWhiteSpace())
-            {
-                url = _configService.ApplicationUrl;
-            }
-
-            return url.IsNullOrWhiteSpace() ? null : url!.TrimEnd('/');
         }
 
         private ArtistArtSettings RequireSettings() =>
