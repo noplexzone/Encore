@@ -46,29 +46,18 @@ namespace Encore.MusicVideos.Tools
         }
 
         /// <summary>
-        /// The -S format sort. yt-dlp's default already prefers resolution, then frame rate, HDR,
-        /// codec (AV1 &gt; VP9 &gt; H.264) and bitrate, so only limits and the compatible mode change it.
+        /// The -S format sort. Best quality takes the highest resolution, then frame rate and HDR, then
+        /// VP9 over AV1 and the highest video bitrate. YouTube's high bitrate VP9 streams (616 at 1080p,
+        /// 625 at 4K) carry three to six times the bitrate of its AV1 streams, which yt-dlp's default
+        /// codec order would otherwise pick. Compatible prefers H.264 and AAC, as yt-dlp's -t mp4 does.
         /// </summary>
-        public static string? FormatSort(MusicVideosSettings settings)
+        public static string FormatSort(MusicVideosSettings settings)
         {
-            var parts = new List<string>();
+            var resolution = settings.MaxResolution > 0 ? $"res:{settings.MaxResolution}" : "res";
 
-            if ((VideoCodecPreference)settings.CodecPreference == VideoCodecPreference.Compatible)
-            {
-                parts.Add("vcodec:h264");
-            }
-
-            if (settings.MaxResolution > 0)
-            {
-                parts.Add($"res:{settings.MaxResolution}");
-            }
-
-            if ((VideoCodecPreference)settings.CodecPreference == VideoCodecPreference.Compatible)
-            {
-                parts.Add("acodec:aac");
-            }
-
-            return parts.Count == 0 ? null : string.Join(",", parts);
+            return (VideoCodecPreference)settings.CodecPreference == VideoCodecPreference.Compatible
+                ? $"vcodec:h264,{resolution},fps,acodec:aac"
+                : $"{resolution},fps,hdr:12,vcodec:vp9,vbr";
         }
 
         public static string ContainerExtension(MusicVideosSettings settings) =>
@@ -81,11 +70,7 @@ namespace Encore.MusicVideos.Tools
 
             args.AddRange(["--no-playlist", "--no-mtime", "-f", "bv*+ba/b"]);
 
-            var sort = FormatSort(settings);
-            if (sort != null)
-            {
-                args.AddRange(["-S", sort]);
-            }
+            args.AddRange(["-S", FormatSort(settings)]);
 
             // Never leave a .webm behind: Navidrome would list it as a song
             args.AddRange(["--merge-output-format", container, "--remux-video", container]);

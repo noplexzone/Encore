@@ -195,7 +195,8 @@ namespace Encore.MusicVideos.Discovery
             var songs = state.Videos.Select(SongKey).ToHashSet();
             var result = new List<MusicVideo>();
 
-            foreach (var video in found)
+            // Stable, so sources keep their order between copies that promise the same quality
+            foreach (var video in found.OrderByDescending(v => VideoTitles.QualityHint(v.SourceTitle)))
             {
                 var allowed = video.Kind switch
                 {

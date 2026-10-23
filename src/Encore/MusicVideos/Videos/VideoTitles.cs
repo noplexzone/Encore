@@ -47,6 +47,17 @@ namespace Encore.MusicVideos.Videos
 
         private static readonly Regex Dash = new(@"\s+[-–—:]\s+|\s[-–—]|[-–—]\s", Options);
 
+        private static readonly Regex UltraHd = new(@"\b(8k|4k|2160p|uhd)\b", Options);
+        private static readonly Regex Remaster = new(@"\b(remaster(ed)?|restored|upgrade[d]?)\b", Options);
+        private static readonly Regex Hd = new(@"\b(hd|1080p|hq)\b", Options);
+
+        /// <summary>
+        /// How much better a copy the title promises. Artists often have the same video uploaded
+        /// several times, from 240p originals to 4K remasters.
+        /// </summary>
+        public static int QualityHint(string title) =>
+            (UltraHd.IsMatch(title) ? 3 : 0) + (Remaster.IsMatch(title) ? 2 : 0) + (Hd.IsMatch(title) ? 1 : 0);
+
         public static VideoKind Classify(string title)
         {
             if (Excluded.IsMatch(title) || Audio.IsMatch(title))

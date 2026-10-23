@@ -52,6 +52,18 @@ namespace Encore.Tests
             Assert.Equal(expected, VideoTitles.Classify(title));
 
         [Theory]
+        [InlineData("Oasis - Wonderwall (Official Video)", 0)]
+        [InlineData("Oasis - Wonderwall (Official HD Remastered Video)", 3)]
+        [InlineData("Rammstein - Du Hast (Official 4K Video)", 3)]
+        [InlineData("Numb (Official Music Video) [4K UPGRADE] – Linkin Park", 5)]
+        public void Titles_hint_at_better_copies(string title, int expected) =>
+            Assert.Equal(expected, VideoTitles.QualityHint(title));
+
+        [Fact]
+        public void Max_resolution_caps_the_best_quality_sort() =>
+            Assert.Equal("res:1080,fps,hdr:12,vcodec:vp9,vbr", YtDlp.FormatSort(new MusicVideosSettings { MaxResolution = (int)MaxResolution.P1080 }));
+
+        [Theory]
         [InlineData("Oasis - Wonderwall (Official Video)", "Oasis", "Wonderwall")]
         [InlineData("Oasis - Live Forever (Official HD Remastered Video)", "Oasis", "Live Forever")]
         [InlineData("The Weeknd - Blinding Lights (Official Music Video) [4K]", "The Weeknd", "Blinding Lights")]
@@ -112,7 +124,7 @@ namespace Encore.Tests
             Assert.Equal("mkv", After(args, "--remux-video"));
             Assert.Equal("/usr/bin/ffmpeg", After(args, "--ffmpeg-location"));
             Assert.Equal("deno:/bin/deno", After(args, "--js-runtimes"));
-            Assert.DoesNotContain("-S", args);
+            Assert.Equal("res,fps,hdr:12,vcodec:vp9,vbr", After(args, "-S"));
             Assert.Equal("https://youtu.be/x", args[^1]);
             Assert.Equal("--", args[^2]);
         }
@@ -131,7 +143,7 @@ namespace Encore.Tests
 
             var args = YtDlp.DownloadArguments(new ToolPaths("yt-dlp", null, null), settings, "https://youtu.be/x", "/tmp/job");
 
-            Assert.Equal("vcodec:h264,res:1080,acodec:aac", After(args, "-S"));
+            Assert.Equal("vcodec:h264,res:1080,fps,acodec:aac", After(args, "-S"));
             Assert.Equal("mp4", After(args, "--remux-video"));
             Assert.Equal("/config/cookies.txt", After(args, "--cookies"));
             Assert.Equal("5M", After(args, "--limit-rate"));
