@@ -98,7 +98,7 @@ Finds each artist's official music videos and downloads them, in the best qualit
 
 ## Using it
 
-Open an artist, hover over the artist image and click **Music videos**, or go to `http://<lidarr>/videos`.
+Each artist page gets a **Music Videos** section below Albums and Singles. It lists the videos found, with buttons to download, ignore or play them and to search again. **Manage** opens the full page, where you can also add a video, channel or playlist by address. All artists are at `http://<lidarr>/videos`.
 
 - **Search now** looks for new videos straight away.
 - Found videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
