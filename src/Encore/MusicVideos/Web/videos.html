@@ -181,7 +181,7 @@
   }
 
   function videoRow(data, v) {
-    var status = v.queued ? 'Queued' : v.status;
+    var status = v.queued ? 'Queued' : !v.monitored && v.status !== 'Downloaded' ? 'Unmonitored' : v.status;
     var buttons = [];
     var player = null;
 
@@ -194,17 +194,17 @@
       buttons.push(el('button', { 'class': 'action', text: 'Delete', onclick: function () {
         if (confirm('Delete ' + v.file + ' and stop getting this video?')) act('/delete', { key: v.key }, 'Deleted');
       } }));
-    } else if (v.status === 'Ignored') {
-      buttons.push(el('button', { 'class': 'action', text: 'Want', onclick: function () { act('/want', { key: v.key }); } }));
+    } else if (!v.monitored) {
+      buttons.push(el('button', { 'class': 'action', text: 'Monitor', onclick: function () { act('/want', { key: v.key }); } }));
     } else {
       if (!v.queued) buttons.push(el('button', { 'class': 'action primary', text: v.status === 'Failed' ? 'Retry' : 'Download', onclick: function () { act('/download', { key: v.key }, 'Queued'); } }));
-      buttons.push(el('button', { 'class': 'action', text: 'Ignore', onclick: function () { act('/ignore', { key: v.key }); } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Unmonitor', onclick: function () { act('/ignore', { key: v.key }); } }));
     }
 
     var meta = [v.kindLabel, v.source, duration(v.duration), v.year, v.quality, size(v.size)].filter(Boolean).join(' · ');
     player = el('div');
 
-    return el('div', { 'class': 'video' + (v.status === 'Ignored' ? ' ignored' : '') }, [
+    return el('div', { 'class': 'video' + (!v.monitored && v.status !== 'Downloaded' ? ' ignored' : '') }, [
       v.thumbnail ? el('img', { 'class': 'thumb', src: v.thumbnail, alt: '', loading: 'lazy' }) : el('div', { 'class': 'thumb' }),
       el('div', { 'class': 'info' }, [
         el('div', { 'class': 'title' }, [el('span', { 'class': 'badge ' + status, text: status }), el('a', { href: v.url, target: '_blank', rel: 'noopener', text: v.title })]),
@@ -231,7 +231,8 @@
       return;
     }
 
-    var wanted = data.videos.filter(function (v) { return v.status === 'Wanted' || v.status === 'Failed'; });
+    var missing = function (v) { return v.status === 'Wanted' || v.status === 'Failed'; };
+    var wanted = data.videos.filter(function (v) { return v.monitored && missing(v); });
     var url = el('input', { 'class': 'text', placeholder: 'Add a YouTube (or other) video, channel or playlist address' });
     var add = el('form', { 'class': 'add' }, [url, el('button', { 'class': 'action', type: 'submit', text: 'Add' })]);
     add.addEventListener('submit', function (e) {
@@ -253,9 +254,9 @@
     ]));
 
     var groups = [
-      { label: 'Found', items: data.videos.filter(function (v) { return v.status === 'Wanted' || v.status === 'Failed'; }) },
+      { label: 'Found', items: wanted },
       { label: 'Downloaded', items: data.videos.filter(function (v) { return v.status === 'Downloaded'; }) },
-      { label: 'Ignored', items: data.videos.filter(function (v) { return v.status === 'Ignored'; }) }
+      { label: 'Not monitored', items: data.videos.filter(function (v) { return !v.monitored && missing(v); }) }
     ];
 
     groups.forEach(function (g) {

@@ -308,16 +308,33 @@ namespace Encore.Tests
 
             store.Update(_artist, settings, s =>
             {
-                s.Videos.Add(new MusicVideo { Key = "youtube:a", Title = "Wonderwall", Kind = VideoKind.Live, Status = VideoStatus.Ignored });
+                s.Videos.Add(new MusicVideo { Key = "youtube:a", Title = "Wonderwall", Kind = VideoKind.Live, Monitored = false });
                 s.CheckedRecordings.Add("r1");
+                s.MonitorNew = false;
             });
 
             Assert.True(File.Exists(Path.Combine(_artist.Path, VideoStore.StateFileName)));
             var state = store.Load(_artist, settings);
             Assert.Equal(VideoKind.Live, state.Videos[0].Kind);
-            Assert.Equal(VideoStatus.Ignored, state.Videos[0].Status);
+            Assert.False(state.Videos[0].Monitored);
+            Assert.False(state.MonitorNew);
             Assert.Contains("r1", state.CheckedRecordings);
             Assert.Contains("\"Live\"", File.ReadAllText(Path.Combine(_artist.Path, VideoStore.StateFileName)));
+        }
+
+        [Fact]
+        public void Ignored_videos_from_older_files_read_as_unmonitored()
+        {
+            var settings = new MusicVideosSettings { VideoFolder = string.Empty };
+            var store = new VideoStore(LogManager.CreateNullLogger());
+            File.WriteAllText(Path.Combine(_artist.Path, VideoStore.StateFileName),
+                "{\"Videos\":[{\"Key\":\"youtube:a\",\"Status\":\"Ignored\"},{\"Key\":\"youtube:b\",\"Status\":\"Ignored\",\"File\":\"b.mkv\"},{\"Key\":\"youtube:c\",\"Status\":\"Wanted\"}]}");
+
+            var videos = store.Load(_artist, settings).Videos;
+
+            Assert.Equal([false, false, true], videos.Select(v => v.Monitored));
+            Assert.Equal([VideoStatus.Wanted, VideoStatus.Downloaded, VideoStatus.Wanted], videos.Select(v => v.Status));
+            Assert.True(store.Load(_artist, settings).MonitorNew);
         }
 
         private static string? After(List<string> args, string flag)

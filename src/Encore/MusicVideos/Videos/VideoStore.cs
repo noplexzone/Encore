@@ -135,7 +135,15 @@ namespace Encore.MusicVideos.Videos
 
             try
             {
-                return JsonSerializer.Deserialize<VideoState>(File.ReadAllText(path)) ?? new VideoState();
+                var state = JsonSerializer.Deserialize<VideoState>(File.ReadAllText(path)) ?? new VideoState();
+
+                foreach (var video in state.Videos.Where(v => v.Status == VideoStatus.Ignored))
+                {
+                    video.Monitored = false;
+                    video.Status = video.File != null ? VideoStatus.Downloaded : VideoStatus.Wanted;
+                }
+
+                return state;
             }
             catch (Exception ex)
             {

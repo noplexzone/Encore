@@ -29,14 +29,7 @@
     '.encore-count.success{background:var(--successColor,#00a65b)}' +
     '.encore-count.danger{background:var(--dangerColor,#f05050)}' +
     '.encore-muted{margin-left:10px;color:var(--helpTextColor,#909293);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-    '.encore-actions{display:flex;gap:6px;padding:15px 10px;font-size:14px}' +
-    '.encore-btn{display:inline-block;padding:4px 10px;border:1px solid var(--defaultBorderColor,#eaeaea);border-radius:4px;' +
-    'background:var(--defaultBackgroundColor,#fff);color:var(--defaultColor,#333);font-size:13px;line-height:1.5;' +
-    'cursor:pointer;text-decoration:none;white-space:nowrap}' +
-    '.encore-btn:hover{border-color:var(--defaultHoverBorderColor,#adadad);background:var(--defaultHoverBackgroundColor,#f5f5f5);' +
-    'text-decoration:none;color:var(--defaultColor,#333)}' +
-    '.encore-btn[disabled]{opacity:.6;cursor:default}' +
-    '.encore-icon{flex:0 0 24px;width:24px;height:24px;color:var(--textColor,#515253)}' +
+    '.encore-actions{display:flex;padding:15px 10px}' +
     '.encore-chevron{flex:0 0 24px;width:24px;height:24px;color:var(--textColor,#515253);transition:transform .15s}' +
     '.encore-section.open .encore-chevron{transform:rotate(180deg)}' +
     '.encore-body{display:none;border-top:1px solid var(--borderColor,#e5e5e5)}' +
@@ -51,18 +44,29 @@
     '.encore-status{white-space:nowrap}' +
     '.encore-status.Downloaded{color:var(--successColor,#00a65b)}' +
     '.encore-status.Failed{color:var(--dangerColor,#f05050)}' +
-    '.encore-status.Ignored{color:var(--helpTextColor,#909293)}' +
-    '.encore-row-actions{white-space:nowrap;text-align:right}' +
-    '.encore-row-actions .encore-btn{margin-left:4px}' +
+    '.encore-status.Unmonitored{color:var(--helpTextColor,#909293)}' +
+    '.encore-row-actions{width:40px;white-space:nowrap;text-align:right}' +
+    '.encore-monitor-cell{width:24px;padding-right:0 !important}' +
+    '.encore-thumb-cell{width:96px}' +
+    '.encore-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;' +
+    'background:none;color:inherit;cursor:pointer}' +
+    '.encore-icon-btn:hover{color:var(--iconButtonHoverColor,#666)}' +
+    '.encore-icon-btn[disabled]{color:var(--disabledColor,#999);cursor:not-allowed}' +
+    '.encore-monitor{color:var(--textColor,#515253)}' +
+    '.encore-svg{width:100%;height:100%;max-width:16px;max-height:16px}' +
+    '.encore-monitor .encore-svg{max-width:none;max-height:none}' +
+    '.encore-head .encore-icon-btn .encore-svg{max-width:20px;max-height:20px}' +
+    '.encore-spin{animation:encore-spin 1s linear infinite}' +
+    '@keyframes encore-spin{to{transform:rotate(360deg)}}' +
+    '.encore-count.warning{background:var(--warningColor,#ffa500)}' +
     '.encore-empty{padding:15px;text-align:center;color:var(--helpTextColor,#909293)}' +
     '.encore-foot{display:flex;justify-content:center;padding:8px;border-top:1px solid var(--borderColor,#e5e5e5);' +
     'background:var(--collapseButtonBackgroundColor,#fafafa);font-size:13px}' +
-    '.encore-foot a{cursor:pointer}' +
-    '.encore-ignored td{opacity:.6}' +
+    '.encore-foot a{color:var(--linkColor,#00a65b)}' +
     '@media (max-width:768px){.encore-videos{padding:0 0 20px}.encore-section{border-left:0;border-right:0;border-radius:0}' +
     '.encore-hide-small,.encore-muted{display:none}.encore-thumb{width:64px;height:36px}' +
-    '.encore-head{font-size:20px}.encore-row-actions{white-space:normal}' +
-    '.encore-row-actions .encore-btn{display:block;margin:0 0 4px auto}}';
+    '.encore-head{font-size:20px}' +
+    '.encore-thumb-cell{width:64px}}';
 
   var style = document.createElement('style');
   style.textContent = css;
@@ -162,8 +166,11 @@
 
   var section = null;
 
-  // Font Awesome's film and circle-chevron-down, as Lidarr uses Font Awesome for its own icons
-  var FILM = '0 0 512 512|M0 96C0 60.7 28.7 32 64 32l384 0c35.3 0 64 28.7 64 64l0 320c0 35.3-28.7 64-64 64L64 480c-35.3 0-64-28.7-64-64L0 96zM48 368l0 32c0 8.8 7.2 16 16 16l32 0c8.8 0 16-7.2 16-16l0-32c0-8.8-7.2-16-16-16l-32 0c-8.8 0-16 7.2-16 16zm368-16c-8.8 0-16 7.2-16 16l0 32c0 8.8 7.2 16 16 16l32 0c8.8 0 16-7.2 16-16l0-32c0-8.8-7.2-16-16-16l-32 0zM48 240l0 32c0 8.8 7.2 16 16 16l32 0c8.8 0 16-7.2 16-16l0-32c0-8.8-7.2-16-16-16l-32 0c-8.8 0-16 7.2-16 16zm368-16c-8.8 0-16 7.2-16 16l0 32c0 8.8 7.2 16 16 16l32 0c8.8 0 16-7.2 16-16l0-32c0-8.8-7.2-16-16-16l-32 0zM48 112l0 32c0 8.8 7.2 16 16 16l32 0c8.8 0 16-7.2 16-16l0-32c0-8.8-7.2-16-16-16l-32 0c-8.8 0-16 7.2-16 16zM416 96c-8.8 0-16 7.2-16 16l0 32c0 8.8 7.2 16 16 16l32 0c8.8 0 16-7.2 16-16l0-32c0-8.8-7.2-16-16-16l-32 0zM160 128l0 64c0 17.7 14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-64c0-17.7-14.3-32-32-32L192 96c-17.7 0-32 14.3-32 32zm32 160c-17.7 0-32 14.3-32 32l0 64c0 17.7 14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-64c0-17.7-14.3-32-32-32l-128 0z';
+  // Font Awesome icons, the same ones Lidarr uses for its own buttons
+  var BOOKMARK = '0 0 384 512|M0 48V487.7C0 501.1 10.9 512 24.3 512c5 0 9.9-1.5 14-4.4L192 400 345.7 507.6c4.1 2.9 9 4.4 14 4.4c13.4 0 24.3-10.9 24.3-24.3V48c0-26.5-21.5-48-48-48H48C21.5 0 0 21.5 0 48z';
+  var BOOKMARK_OUTLINE = '0 0 384 512|M0 48C0 21.5 21.5 0 48 0l0 48 0 393.4 130.1-92.9c8.3-6 19.6-6 27.9 0L336 441.4 336 48 48 48 48 0 336 0c26.5 0 48 21.5 48 48l0 440c0 9-5 17.2-13 21.3s-17.6 3.4-24.9-1.8L192 397.5 37.9 507.5c-7.3 5.2-16.9 5.9-24.9 1.8S0 497 0 488L0 48z';
+  var SEARCH = '0 0 512 512|M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z';
+  var SPINNER = '0 0 512 512|M304 48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zm0 416a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM48 304a48 48 0 1 0 0-96 48 48 0 1 0 0 96zm464-48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM142.9 437A48 48 0 1 0 75 369.1 48 48 0 1 0 142.9 437zm0-294.2A48 48 0 1 0 75 75a48 48 0 1 0 67.9 67.9zM369.1 437A48 48 0 1 0 437 369.1 48 48 0 1 0 369.1 437z';
   var CHEVRON = '0 0 512 512|M256 0a256 256 0 1 0 0 512A256 256 0 1 0 256 0zM135 241c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l87 87 87-87c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9L273 345c-9.4 9.4-24.6 9.4-33.9 0L135 241z';
 
   function icon(spec, className) {
@@ -194,7 +201,6 @@
     var self = this;
     // Collapsed at first, like Lidarr's own sections
     var expanded = remember('encore.videos.expanded') === '1';
-    var showIgnored = false;
     var data = null;
     var worker = null;
     var timer = null;
@@ -240,30 +246,50 @@
     function statusText(v) {
       if (worker && worker.artistId === artist.id && worker.videoKey === v.key) return 'Downloading' + (worker.progress ? ' ' + worker.progress : '');
       if (v.queued) return 'Queued';
-      if (v.status === 'Wanted') return 'Missing';
+      if (v.status === 'Wanted') return v.monitored ? 'Missing' : 'Unmonitored';
       return v.status;
     }
 
+    // Lidarr's MonitorToggleButton: a filled bookmark when monitored, an outline when not
+    function monitorToggle(monitored, size, title, onToggle) {
+      var disabled = !data || !data.monitored;
+      return el('button', {
+        'class': 'encore-icon-btn encore-monitor',
+        style: 'width:' + size + 'px;height:' + size + 'px',
+        title: disabled ? 'Artist is not monitored' : title,
+        disabled: disabled ? 'disabled' : null,
+        onclick: function (e) {
+          e.stopPropagation();
+          if (!disabled) onToggle(!monitored);
+        }
+      }, [icon(monitored ? BOOKMARK : BOOKMARK_OUTLINE, 'encore-svg')]);
+    }
+
+    function searchButton(title, spinning, onPress) {
+      return el('button', {
+        'class': 'encore-icon-btn',
+        title: title,
+        disabled: spinning ? 'disabled' : null,
+        onclick: function (e) { e.stopPropagation(); onPress(); }
+      }, [icon(spinning ? SPINNER : SEARCH, 'encore-svg' + (spinning ? ' encore-spin' : ''))]);
+    }
+
+    function setMonitored(key, monitored) {
+      data.videos.forEach(function (v) { if (key === null || v.key === key) v.monitored = monitored; });
+      if (key === null) data.monitorNew = monitored;
+      render();
+      act('/monitor', { key: key, monitored: monitored });
+    }
+
     function row(v) {
-      var actions = [];
-      var file = urlBase + '/videos/api/' + artist.id + '/file?key=' + encodeURIComponent(v.key);
-
-      if (v.status === 'Downloaded') {
-        actions.push(el('a', { 'class': 'encore-btn', href: file, target: '_blank', rel: 'noopener', text: 'Play' }));
-      } else if (v.status !== 'Ignored' && !v.queued) {
-        actions.push(el('button', { 'class': 'encore-btn', text: 'Download', onclick: function () { act('/download', { key: v.key }); } }));
-      }
-
-      if (v.status === 'Ignored') {
-        actions.push(el('button', { 'class': 'encore-btn', text: 'Want', onclick: function () { act('/want', { key: v.key }); } }));
-      } else if (v.status !== 'Downloaded') {
-        actions.push(el('button', { 'class': 'encore-btn', text: 'Ignore', onclick: function () { act('/ignore', { key: v.key }); } }));
-      }
-
+      var downloading = !!(worker && worker.artistId === artist.id && worker.videoKey === v.key);
       var sub = [v.source, duration(v.duration), v.year].filter(Boolean).join(' · ');
 
-      return el('tr', { 'class': v.status === 'Ignored' ? 'encore-ignored' : null }, [
-        el('td', { style: 'width:96px' }, [
+      return el('tr', {}, [
+        el('td', { 'class': 'encore-monitor-cell' }, [
+          monitorToggle(v.monitored, 14, v.monitored ? 'Monitored, click to unmonitor' : 'Unmonitored, click to monitor', function (on) { setMonitored(v.key, on); })
+        ]),
+        el('td', { 'class': 'encore-thumb-cell' }, [
           v.thumbnail ? el('img', { 'class': 'encore-thumb', src: v.thumbnail, loading: 'lazy', alt: '' }) : el('div', { 'class': 'encore-thumb' })
         ]),
         el('td', {}, [
@@ -272,19 +298,23 @@
         ]),
         el('td', { 'class': 'encore-hide-small', text: v.kindLabel }),
         el('td', { 'class': 'encore-hide-small', text: [v.quality, size(v.size)].filter(Boolean).join(' · ') }),
-        el('td', { 'class': 'encore-status ' + v.status, title: v.error || null, text: statusText(v) }),
-        el('td', { 'class': 'encore-row-actions' }, actions)
+        el('td', { 'class': 'encore-status ' + (v.monitored ? v.status : 'Unmonitored'), title: v.error || null, text: statusText(v) }),
+        el('td', { 'class': 'encore-row-actions' }, [
+          searchButton(v.status === 'Downloaded' ? 'Download again' : 'Download', v.queued || downloading, function () { act('/download', { key: v.key }); })
+        ])
       ]);
     }
 
     function render() {
       var videos = data ? data.videos : [];
-      var visible = videos.filter(function (v) { return showIgnored || v.status !== 'Ignored'; });
-      var counted = videos.filter(function (v) { return v.status !== 'Ignored'; });
-      var have = counted.filter(function (v) { return v.status === 'Downloaded'; });
-      var ignored = videos.length - counted.length;
+      var have = videos.filter(function (v) { return v.status === 'Downloaded'; });
+      // Counted like Lidarr counts albums: the monitored ones plus any already on disk
+      var counted = videos.filter(function (v) { return v.monitored || v.status === 'Downloaded'; });
+      var anyMonitored = videos.some(function (v) { return v.monitored; });
+      var groupMonitored = !!data && (data.monitorNew || anyMonitored);
       var missing = counted.length - have.length;
       var bytes = have.reduce(function (sum, v) { return sum + (v.size || 0); }, 0);
+      var searching = !!data && (data.searching || videos.some(function (v) { return v.queued; }) || !!(worker && worker.artistId === artist.id));
 
       var note = '';
       if (error) note = error;
@@ -292,48 +322,51 @@
       else if (worker && worker.artistId === artist.id && worker.activity) note = worker.activity + (worker.progress ? ' · ' + worker.progress : '');
       else if (bytes) note = size(bytes);
 
-      var head = el('div', { 'class': 'encore-head', onclick: function (e) {
-        if (e.target.closest('.encore-actions')) return;
+      var kind = !counted.length ? '' : !missing ? 'success' : groupMonitored && data.monitored ? 'danger' : 'warning';
+
+      var head = el('div', { 'class': 'encore-head', onclick: function () {
         expanded = !expanded;
         remember('encore.videos.expanded', expanded ? '1' : '0');
         render();
       } }, [
         el('div', { 'class': 'encore-left' }, [
-          icon(FILM, 'encore-icon'),
+          monitorToggle(groupMonitored, 24,
+            groupMonitored ? 'Unmonitor all music videos, including ones found later' : 'Monitor all music videos, including ones found later',
+            function (on) { setMonitored(null, on); }),
           el('span', { 'class': 'encore-label', text: 'Music Videos' }),
           el('span', {
-            'class': 'encore-count ' + (!counted.length ? '' : missing ? 'danger' : 'success'),
-            title: have.length + ' downloaded, ' + missing + ' missing' + (ignored ? ', ' + ignored + ' ignored' : ''),
+            'class': 'encore-count ' + kind,
+            title: have.length + ' downloaded, ' + missing + ' monitored and missing, ' + (videos.length - counted.length) + ' unmonitored',
             text: have.length + ' / ' + counted.length
           }),
           note ? el('span', { 'class': 'encore-muted', title: note, text: note }) : null
         ]),
         el('div', { 'class': 'encore-expand' }, [icon(CHEVRON, 'encore-chevron')]),
         el('div', { 'class': 'encore-actions' }, [
-          missing ? el('button', { 'class': 'encore-btn encore-hide-small', text: 'Download missing', onclick: function () { act('/download-all'); } }) : null,
-          el('button', { 'class': 'encore-btn', text: 'Search', disabled: data && data.searching ? 'disabled' : null, onclick: function () { act('/search'); } }),
-          el('a', { 'class': 'encore-btn encore-hide-small', href: urlBase + '/videos/' + artist.id, text: 'Manage' })
+          searchButton('Look for new music videos and download the monitored ones that are missing', searching, function () {
+            act('/download-all').then(function () { return act('/search'); });
+          })
         ])
       ]);
 
       var body;
       if (!data) {
         body = el('div', { 'class': 'encore-empty', text: error || 'Loading…' });
-      } else if (!visible.length) {
-        body = el('div', { 'class': 'encore-empty', text: data.lastSearch ? 'No music videos found yet' : 'Not searched yet. Click Search to look for music videos.' });
+      } else if (!videos.length) {
+        body = el('div', { 'class': 'encore-empty', text: data.lastSearch ? 'No music videos found yet' : 'Not searched yet. Use the search button to look for music videos.' });
       } else {
         body = el('table', { 'class': 'encore-table' }, [
           el('thead', {}, [el('tr', {}, [
-            el('th', {}), el('th', { text: 'Title' }), el('th', { 'class': 'encore-hide-small', text: 'Type' }),
+            el('th', {}), el('th', {}), el('th', { text: 'Title' }), el('th', { 'class': 'encore-hide-small', text: 'Type' }),
             el('th', { 'class': 'encore-hide-small', text: 'Quality' }), el('th', { text: 'Status' }), el('th', {})
           ])]),
-          el('tbody', {}, visible.map(row))
+          el('tbody', {}, videos.map(row))
         ]);
       }
 
-      var foot = ignored ? el('div', { 'class': 'encore-foot' }, [
-        el('a', { text: showIgnored ? 'Hide ignored' : 'Show ' + ignored + ' ignored', onclick: function () { showIgnored = !showIgnored; render(); } })
-      ]) : null;
+      var foot = el('div', { 'class': 'encore-foot' }, [
+        el('a', { href: urlBase + '/videos/' + artist.id, text: 'Manage music videos' })
+      ]);
 
       var box = el('div', { 'class': 'encore-section' + (expanded ? ' open' : '') }, [
         head,

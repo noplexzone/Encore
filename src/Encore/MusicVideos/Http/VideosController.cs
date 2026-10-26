@@ -54,7 +54,7 @@ namespace Encore.MusicVideos.Http
                         id = a.Id,
                         name = a.Name,
                         downloaded = videos.Count(v => v.Status == VideoStatus.Downloaded),
-                        wanted = videos.Count(v => v.Status is VideoStatus.Wanted or VideoStatus.Failed)
+                        wanted = videos.Count(v => v.Monitored && v.Status is VideoStatus.Wanted or VideoStatus.Failed)
                     };
                 }));
         }
@@ -86,11 +86,12 @@ namespace Encore.MusicVideos.Http
                 folder = _store.VideoFolder(artist, settings),
                 folderExists,
                 lastSearch = state.LastSearch,
+                monitored = artist.Monitored,
+                monitorNew = state.MonitorNew,
                 searching = _videoService.IsQueued(artist.Id, null),
                 extraSources = state.ExtraSources,
                 videos = state.Videos
-                    .OrderBy(v => v.Status == VideoStatus.Ignored)
-                    .ThenBy(v => v.Kind)
+                    .OrderBy(v => v.Kind)
                     .ThenBy(v => v.Title, StringComparer.OrdinalIgnoreCase)
                     .Select(v => new
                     {
@@ -105,6 +106,7 @@ namespace Encore.MusicVideos.Http
                         duration = v.Duration,
                         year = v.Year,
                         status = v.Status.ToString(),
+                        monitored = v.Monitored,
                         queued = _videoService.IsQueued(artist.Id, v.Key),
                         file = v.File,
                         error = v.Error,
@@ -143,32 +145,24 @@ namespace Encore.MusicVideos.Http
 
         [HttpPost("api/{artistId:int}/download")]
         public IActionResult Download(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist =>
-            {
-                _videoService.SetStatus(artist, Required(request.Key), VideoStatus.Wanted);
-                _videoService.QueueDownload(artist.Id, request.Key!);
-            });
+            Change(artistId, artist => _videoService.DownloadNow(artist, Required(request.Key)));
 
         [HttpPost("api/{artistId:int}/download-all")]
         public IActionResult DownloadAll(int artistId) =>
-            Change(artistId, artist =>
-            {
-                var settings = _videoService.Settings!;
-
-                foreach (var video in _store.Load(artist, settings).Videos.Where(v => v.Status is VideoStatus.Wanted or VideoStatus.Failed))
-                {
-                    _videoService.SetStatus(artist, video.Key, VideoStatus.Wanted);
-                    _videoService.QueueDownload(artist.Id, video.Key);
-                }
-            });
+            Change(artistId, artist => _videoService.DownloadMissing(artist));
 
         [HttpPost("api/{artistId:int}/ignore")]
         public IActionResult Ignore(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist => _videoService.SetStatus(artist, Required(request.Key), VideoStatus.Ignored));
+            Change(artistId, artist => _videoService.SetMonitored(artist, Required(request.Key), false));
 
         [HttpPost("api/{artistId:int}/want")]
         public IActionResult Want(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist => _videoService.SetStatus(artist, Required(request.Key), VideoStatus.Wanted));
+            Change(artistId, artist => _videoService.SetMonitored(artist, Required(request.Key), true));
+
+        // No key monitors or unmonitors all of the artist's videos, and the ones found later
+        [HttpPost("api/{artistId:int}/monitor")]
+        public IActionResult Monitor(int artistId, [FromBody] VideoRequest request) =>
+            Change(artistId, artist => _videoService.SetMonitored(artist, request.Key, request.Monitored ?? true));
 
         [HttpPost("api/{artistId:int}/delete")]
         public IActionResult Delete(int artistId, [FromBody] VideoRequest request) =>
@@ -243,6 +237,7 @@ namespace Encore.MusicVideos.Http
         {
             public string? Key { get; set; }
             public string? Url { get; set; }
+            public bool? Monitored { get; set; }
         }
     }
 }

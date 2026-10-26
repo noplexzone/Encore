@@ -86,7 +86,7 @@ Finds each artist's official music videos and downloads them, in the best qualit
   3. The uploads of the artist's YouTube channels that MusicBrainz knows about (their own channel and their VEVO channel), keeping only titles that say they are official videos.
 - **Downloads** with [yt-dlp](https://github.com/yt-dlp/yt-dlp), taking the best video and the best audio stream separately and joining them with ffmpeg. On YouTube that usually means 4K or 1440p AV1/VP9 when the video has it, and Opus audio.
 - **Saves** `Music Videos/<Artist> - <Title>.mkv` in the artist folder, with `<name>-thumb.jpg` and a Kodi-style `<name>.nfo` that Jellyfin, Emby and Kodi read. Files are always `.mkv` or `.mp4`, never `.webm`: Navidrome treats `.webm` and `.mka` as songs, but ignores `.mkv` and `.mp4`. Lidarr ignores them too.
-- **Keeps track** in `musicvideos.json` in the video folder, so ignored and downloaded videos survive a Lidarr reinstall.
+- **Keeps track** in `musicvideos.json` in the video folder, so monitoring and downloaded videos survive a Lidarr reinstall.
 - Each artist is searched when it is added and again every 7 days. Videos already found are never offered twice, even from another channel.
 
 ## Turning it on
@@ -98,11 +98,17 @@ Finds each artist's official music videos and downloads them, in the best qualit
 
 ## Using it
 
-Each artist page gets a **Music Videos** section below Albums and Singles. It lists the videos found, with buttons to download, ignore or play them and to search again. **Manage** opens the full page, where you can also add a video, channel or playlist by address. All artists are at `http://<lidarr>/videos`.
+Each artist page gets a **Music Videos** section below Albums and Singles that works like them:
+
+- The bookmark on each video monitors or unmonitors it. The bookmark in the section header does all of them at once, and also decides whether videos found later start out monitored.
+- The search icon on a video downloads it now. The search icon in the header looks for new videos and downloads the monitored ones that are missing.
+- Monitored videos download automatically while the artist is monitored, like albums.
+
+**Manage music videos** at the bottom opens the full page. All artists are at `http://<lidarr>/videos`. On the full page:
 
 - **Search now** looks for new videos straight away.
-- Found videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
-- **Ignore** stops a video from being downloaded. **Delete** removes the file and ignores it.
+- Monitored videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
+- **Unmonitor** stops a video from being downloaded. **Delete** removes the file and unmonitors it.
 - **Add** takes a video address (downloaded whatever its title says) or a channel or playlist address (scanned now and on every search).
 - **Play** plays a downloaded video in the browser, if the browser supports its codecs.
 

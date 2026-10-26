@@ -16,6 +16,8 @@ namespace Encore.MusicVideos.Videos
     {
         Wanted,
         Downloaded,
+
+        // Only in files from before videos had Monitored; read as an unmonitored video
         Ignored,
         Failed
     }
@@ -37,6 +39,9 @@ namespace Encore.MusicVideos.Videos
         public string? RecordingId { get; set; }
         public int? Year { get; set; }
         public VideoStatus Status { get; set; }
+
+        // Like a monitored album: downloaded automatically when missing
+        public bool Monitored { get; set; } = true;
         public string? File { get; set; }
         public string? Error { get; set; }
         public DateTime Added { get; set; }
@@ -86,6 +91,9 @@ namespace Encore.MusicVideos.Videos
         public DateTime? LastSearch { get; set; }
 
         public List<MusicVideo> Videos { get; set; } = [];
+
+        // Whether videos found from now on start out monitored, set by the section's monitor toggle
+        public bool MonitorNew { get; set; } = true;
 
         // MusicBrainz video recordings already looked up, so a new search only asks about new ones
         public HashSet<string> CheckedRecordings { get; set; } = [];
