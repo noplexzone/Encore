@@ -22,12 +22,14 @@
     '.encore-videos{padding:0 20px 20px}' +
     '.encore-section{border:1px solid var(--borderColor,#e5e5e5);border-radius:4px;background:var(--cardBackgroundColor,#fff)}' +
     '.encore-head{display:flex;align-items:center;font-size:24px;cursor:pointer;user-select:none}' +
-    '.encore-left{display:flex;align-items:center;flex:0 1 auto;padding:15px 10px;min-width:0}' +
+    // At least as wide as Lidarr's, so the expand buttons line up
+    '.encore-left{display:flex;align-items:center;flex:0 1 auto;padding:15px 10px;min-width:350px;box-sizing:border-box}' +
     '.encore-expand{display:flex;flex:1 1 auto;justify-content:center}' +
     '.encore-label{margin:0 10px 0 5px;white-space:nowrap}' +
     '.encore-count{white-space:nowrap;padding:3px 7px;border-radius:2px;font-weight:bold;font-size:14px;color:#fff;background:var(--themeLightColor,#3a3f51)}' +
     '.encore-count.success{background:var(--successColor,#00a65b)}' +
     '.encore-count.danger{background:var(--dangerColor,#f05050)}' +
+    '.encore-muted.encore-error{color:var(--dangerColor,#f05050)}' +
     '.encore-muted{margin-left:10px;color:var(--helpTextColor,#909293);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     '.encore-actions{display:flex;padding:15px 10px}' +
     '.encore-chevron{flex:0 0 24px;width:24px;height:24px;color:var(--textColor,#515253);transition:transform .15s}' +
@@ -55,7 +57,8 @@
     '.encore-monitor{color:var(--textColor,#515253)}' +
     '.encore-svg{width:100%;height:100%;max-width:16px;max-height:16px}' +
     '.encore-monitor .encore-svg{max-width:none;max-height:none}' +
-    '.encore-head .encore-icon-btn .encore-svg{max-width:20px;max-height:20px}' +
+    '.encore-head .encore-icon-btn .encore-svg,.encore-section-search .encore-svg{max-width:20px;max-height:20px}' +
+    '.encore-section-search{flex:0 0 auto;font-size:14px}' +
     '.encore-spin{animation:encore-spin 1s linear infinite}' +
     '@keyframes encore-spin{to{transform:rotate(360deg)}}' +
     '.encore-count.warning{background:var(--warningColor,#ffa500)}' +
@@ -63,7 +66,7 @@
     '.encore-foot{display:flex;justify-content:center;padding:8px;border-top:1px solid var(--borderColor,#e5e5e5);' +
     'background:var(--collapseButtonBackgroundColor,#fafafa);font-size:13px}' +
     '.encore-foot a{color:var(--linkColor,#00a65b)}' +
-    '@media (max-width:768px){.encore-videos{padding:0 0 20px}.encore-section{border-left:0;border-right:0;border-radius:0}' +
+    '@media (max-width:768px){.encore-left{min-width:0}.encore-videos{padding:0 0 20px}.encore-section{border-left:0;border-right:0;border-radius:0}' +
     '.encore-hide-small,.encore-muted{display:none}.encore-thumb{width:64px;height:36px}' +
     '.encore-head{font-size:20px}' +
     '.encore-thumb-cell{width:64px}}';
@@ -202,45 +205,54 @@
     // Collapsed at first, like Lidarr's own sections
     var expanded = remember('encore.videos.expanded') === '1';
     var data = null;
-    var worker = null;
     var timer = null;
     var error = null;
+    var changes = 0;
     var generation = 0;
 
     self.id = id;
     self.node = el('div', { 'class': 'encore-videos' });
 
-    function act(path, body) {
-      generation++;
-      return request('POST', '/videos/api/' + artist.id + path, body)
-        .then(refresh)
-        .catch(function (e) { error = e.message; render(); });
+    function show(result) {
+      data = result;
+      render();
+      schedulePoll();
     }
 
-    function refresh() {
+    // A change answers with the artist's videos as they are after it, so nothing is fetched in between
+    function act(path, body) {
+      changes++;
+      generation++;
+      clearTimeout(timer);
+      return request('POST', '/videos/api/' + artist.id + path, body || {})
+        .then(function (result) { error = null; show(result); })
+        .catch(function (e) {
+          // Kept on screen until the next change, so a failure is never just a flicker
+          error = 'Couldn\'t save: ' + e.message;
+          return refresh(true);
+        })
+        .then(function () { changes--; });
+    }
+
+    function refresh(keepError) {
       // A poll that started before a change mustn't paint over it when it answers late
       var mine = ++generation;
-      return Promise.all([
-        request('GET', '/videos/api/' + artist.id),
-        request('GET', '/videos/api/status').catch(function () { return null; })
-      ]).then(function (results) {
-        if (mine !== generation) return;
-        data = results[0];
-        worker = results[1];
-        error = null;
-        render();
-        schedulePoll();
+      return request('GET', '/videos/api/' + artist.id).then(function (result) {
+        if (mine !== generation || (changes && keepError !== true)) return;
+        if (keepError !== true && error && error.indexOf('Couldn\'t save') !== 0) error = null;
+        show(result);
       }).catch(function (e) {
+        if (mine !== generation) return;
         error = e.message;
         render();
+        schedulePoll();
       });
     }
 
     function busy() {
       if (!data) return false;
-      if (data.searching) return true;
-      if (worker && worker.artistId === artist.id) return true;
-      return data.videos.some(function (v) { return v.queued; });
+      if (data.searching || data.refreshing) return true;
+      return data.videos.some(function (v) { return v.queued || v.downloading; });
     }
 
     function schedulePoll() {
@@ -249,9 +261,9 @@
     }
 
     function statusText(v) {
-      if (!v.monitored && v.status !== 'Downloaded') return 'Unmonitored';
-      if (worker && worker.artistId === artist.id && worker.videoKey === v.key) return 'Downloading' + (worker.progress ? ' ' + worker.progress : '');
+      if (v.downloading) return 'Downloading' + (v.progress ? ' ' + v.progress : '');
       if (v.queued) return 'Queued';
+      if (!v.monitored && v.status !== 'Downloaded') return 'Unmonitored';
       if (v.status === 'Wanted') return 'Missing';
       return v.status;
     }
@@ -288,7 +300,6 @@
     }
 
     function row(v) {
-      var downloading = !!(worker && worker.artistId === artist.id && worker.videoKey === v.key);
       var sub = [v.source, duration(v.duration), v.year].filter(Boolean).join(' · ');
 
       return el('tr', {}, [
@@ -306,7 +317,7 @@
         el('td', { 'class': 'encore-hide-small', text: [v.quality, size(v.size)].filter(Boolean).join(' · ') }),
         el('td', { 'class': 'encore-status ' + (v.monitored ? v.status : 'Unmonitored'), title: v.error || null, text: statusText(v) }),
         el('td', { 'class': 'encore-row-actions' }, [
-          searchButton(v.status === 'Downloaded' ? 'Download again' : 'Download', v.queued || downloading, function () { act('/download', { key: v.key }); })
+          searchButton(v.status === 'Downloaded' ? 'Search again' : 'Search', v.queued || v.downloading, function () { act('/search', { key: v.key }); })
         ])
       ]);
     }
@@ -320,12 +331,14 @@
       var groupMonitored = !!data && (data.monitorNew || anyMonitored);
       var missing = counted.length - have.length;
       var bytes = have.reduce(function (sum, v) { return sum + (v.size || 0); }, 0);
-      var searching = !!data && (data.searching || videos.some(function (v) { return v.queued; }) || !!(worker && worker.artistId === artist.id));
+      var searching = !!data && (data.searching || videos.some(function (v) { return v.queued || v.downloading; }));
+      var downloading = videos.filter(function (v) { return v.downloading; })[0];
 
       var note = '';
       if (error) note = error;
-      else if (data && data.searching) note = 'Searching…';
-      else if (worker && worker.artistId === artist.id && worker.activity) note = worker.activity + (worker.progress ? ' · ' + worker.progress : '');
+      else if (downloading) note = 'Downloading ' + downloading.title + (downloading.progress ? ' · ' + downloading.progress : '');
+      else if (searching) note = 'Searching…';
+      else if (data && data.refreshing) note = 'Looking for music videos…';
       else if (bytes) note = size(bytes);
 
       var kind = !counted.length ? '' : !missing ? 'success' : groupMonitored && data.monitored ? 'danger' : 'warning';
@@ -345,13 +358,11 @@
             title: have.length + ' downloaded, ' + missing + ' monitored and missing, ' + (videos.length - counted.length) + ' unmonitored',
             text: have.length + ' / ' + counted.length
           }),
-          note ? el('span', { 'class': 'encore-muted', title: note, text: note }) : null
+          note ? el('span', { 'class': 'encore-muted' + (error ? ' encore-error' : ''), title: note, text: note }) : null
         ]),
         el('div', { 'class': 'encore-expand' }, [icon(CHEVRON, 'encore-chevron')]),
         el('div', { 'class': 'encore-actions' }, [
-          searchButton('Look for new music videos and download the monitored ones that are missing', searching, function () {
-            act('/download-all').then(function () { return act('/search'); });
-          })
+          searchButton('Search for the monitored music videos that are missing', searching, function () { act('/search'); })
         ])
       ]);
 
@@ -359,7 +370,7 @@
       if (!data) {
         body = el('div', { 'class': 'encore-empty', text: error || 'Loading…' });
       } else if (!videos.length) {
-        body = el('div', { 'class': 'encore-empty', text: data.lastSearch ? 'No music videos found yet' : 'Not searched yet. Use the search button to look for music videos.' });
+        body = el('div', { 'class': 'encore-empty', text: data.refreshing ? 'Looking for music videos…' : data.lastSearch ? 'No music videos found' : 'Not looked for yet. Refresh the artist to look for music videos.' });
       } else {
         body = el('table', { 'class': 'encore-table' }, [
           el('thead', {}, [el('tr', {}, [
@@ -397,6 +408,94 @@
     render();
   }
 
+  // ---- A search button on Lidarr's own sections (Albums, Singles, EPs...) ----
+
+  // Section searches running, by artist and section, so a redrawn header keeps its spinner
+  var sectionSearches = {};
+
+  function lidarr(method, path, body) {
+    var options = { method: method, credentials: 'same-origin', headers: { 'X-Api-Key': (window.Lidarr && window.Lidarr.apiKey) || '' } };
+    if (body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
+    return fetch(urlBase + '/api/v1' + path, options).then(function (r) {
+      if (!r.ok) throw new Error('Request failed: ' + r.status);
+      return r.json();
+    });
+  }
+
+  function sectionHeaders() {
+    var nodes = document.querySelectorAll('div[class*="ArtistDetailsSeason"]');
+    var headers = [];
+    for (var i = 0; i < nodes.length; i++) {
+      if (/(^|\s)ArtistDetailsSeason[-\/]header([-\/\s]|$)/.test(nodes[i].className)) headers.push(nodes[i]);
+    }
+    return headers;
+  }
+
+  function waitForCommand(id) {
+    return new Promise(function (resolve) {
+      var tries = 0;
+      (function check() {
+        lidarr('GET', '/command/' + id).then(function (command) {
+          if (command.status === 'queued' || command.status === 'started') {
+            if (++tries < 600) return setTimeout(check, 2000);
+          }
+          resolve();
+        }).catch(function () { resolve(); });
+      })();
+    });
+  }
+
+  // Like Lidarr's Search Monitored, but only for the albums of one section
+  function searchSection(artistId, type) {
+    var key = artistId + ':' + type;
+    if (sectionSearches[key]) return;
+    sectionSearches[key] = true;
+    redrawSectionButtons();
+
+    lidarr('GET', '/album?artistId=' + artistId).then(function (albums) {
+      var ids = albums.filter(function (a) { return a.albumType === type && a.monitored; }).map(function (a) { return a.id; });
+      if (!ids.length) return null;
+      return lidarr('POST', '/command', { name: 'AlbumSearch', albumIds: ids }).then(function (command) { return waitForCommand(command.id); });
+    }).catch(function () {}).then(function () {
+      delete sectionSearches[key];
+      redrawSectionButtons();
+    });
+  }
+
+  function sectionButton(artistId, type) {
+    var spinning = !!sectionSearches[artistId + ':' + type];
+    return el('button', {
+      'class': 'encore-icon-btn',
+      title: 'Search for the monitored ' + type.toLowerCase() + ' releases',
+      disabled: spinning ? 'disabled' : null,
+      onclick: function (e) { e.stopPropagation(); searchSection(artistId, type); }
+    }, [icon(spinning ? SPINNER : SEARCH, 'encore-svg' + (spinning ? ' encore-spin' : ''))]);
+  }
+
+  var sectionArtist = null;
+
+  function redrawSectionButtons() {
+    document.querySelectorAll('.encore-section-search').forEach(function (box) {
+      box.replaceChildren(sectionButton(sectionArtist, box.getAttribute('data-type')));
+    });
+  }
+
+  function decorateSections(artist) {
+    if (!artist) return;
+    sectionArtist = artist.id;
+
+    sectionHeaders().forEach(function (header) {
+      var label = header.querySelector('[class*="albumTypeLabel"]');
+      var type = label && label.textContent.trim();
+      var box = header.querySelector('.encore-section-search');
+
+      if (!type || (box && box.getAttribute('data-type') === type)) return;
+      if (box) box.remove();
+
+      header.appendChild(el('div', { 'class': 'encore-actions encore-section-search', 'data-type': type }, [sectionButton(artist.id, type)]));
+    });
+  }
+
   function decorateVideos(id, artist) {
     var content = findByClass('div', /ArtistDetails[-\/]contentContainer/);
 
@@ -427,12 +526,13 @@
       if (foreignArtistId() !== id) return;
       decoratePoster(id, artist);
       decorateVideos(id, artist);
+      decorateSections(artist);
     });
   }
 
   function schedule(mutations) {
     // Our own changes don't need another pass
-    if (mutations && mutations.every(function (m) { return m.target.closest && m.target.closest('.encore-videos,.encore-overlay'); })) return;
+    if (mutations && mutations.every(function (m) { return m.target.closest && m.target.closest('.encore-videos,.encore-overlay,.encore-section-search'); })) return;
     if (!pending) {
       pending = true;
       setTimeout(decorate, 150);

@@ -364,14 +364,14 @@ namespace Encore.Tests
             {
                 s.Videos.Add(new MusicVideo { Key = "youtube:a", Title = "Wonderwall", Kind = VideoKind.Live, Monitored = false });
                 s.CheckedRecordings.Add("r1");
-                s.MonitorNew = false;
+                s.MonitorNewVideos = false;
             });
 
             Assert.True(File.Exists(Path.Combine(_artist.Path, VideoStore.StateFileName)));
             var state = store.Load(_artist, settings);
             Assert.Equal(VideoKind.Live, state.Videos[0].Kind);
             Assert.False(state.Videos[0].Monitored);
-            Assert.False(state.MonitorNew);
+            Assert.False(state.MonitorNewVideos);
             Assert.Contains("r1", state.CheckedRecordings);
             Assert.Contains("\"Live\"", File.ReadAllText(Path.Combine(_artist.Path, VideoStore.StateFileName)));
         }
@@ -388,7 +388,51 @@ namespace Encore.Tests
 
             Assert.Equal([false, false, true], videos.Select(v => v.Monitored));
             Assert.Equal([VideoStatus.Wanted, VideoStatus.Downloaded, VideoStatus.Wanted], videos.Select(v => v.Status));
-            Assert.True(store.Load(_artist, settings).MonitorNew);
+            Assert.Null(store.Load(_artist, settings).MonitorNewVideos);
+        }
+
+        [Theory]
+        [InlineData("true", null)]
+        [InlineData("false", false)]
+        public void Monitor_new_from_older_files_only_keeps_an_unmonitored_artist(string monitorNew, bool? expected)
+        {
+            var settings = new MusicVideosSettings { VideoFolder = string.Empty };
+            var store = new VideoStore(LogManager.CreateNullLogger());
+            var path = Path.Combine(_artist.Path, VideoStore.StateFileName);
+            File.WriteAllText(path, "{\"MonitorNew\":" + monitorNew + ",\"Videos\":[]}");
+
+            Assert.Equal(expected, store.Load(_artist, settings).MonitorNewVideos);
+
+            store.Update(_artist, settings, _ => { });
+            Assert.DoesNotContain("\"MonitorNew\"", File.ReadAllText(path));
+            Assert.Equal(expected, store.Load(_artist, settings).MonitorNewVideos);
+        }
+
+        [Fact]
+        public void A_broken_state_file_is_kept_aside()
+        {
+            var settings = new MusicVideosSettings { VideoFolder = string.Empty };
+            var store = new VideoStore(LogManager.CreateNullLogger());
+            var path = Path.Combine(_artist.Path, VideoStore.StateFileName);
+            File.WriteAllText(path, "{\"Videos\":[");
+
+            Assert.Empty(store.Load(_artist, settings).Videos);
+            Assert.True(File.Exists(path + ".bad"));
+        }
+
+        [Fact]
+        public void A_search_queues_monitored_missing_videos_it_has_not_tried_yet()
+        {
+            var activity = new ArtistActivity { SearchingAll = true };
+            activity.QueuedKeys.Add("asked");
+            activity.Attempted.Add("tried");
+
+            Assert.True(activity.IsQueued(new MusicVideo { Key = "missing" }));
+            Assert.False(activity.IsQueued(new MusicVideo { Key = "unmonitored", Monitored = false }));
+            Assert.False(activity.IsQueued(new MusicVideo { Key = "have", Status = VideoStatus.Downloaded }));
+            Assert.False(activity.IsQueued(new MusicVideo { Key = "tried" }));
+            Assert.True(activity.IsQueued(new MusicVideo { Key = "asked", Monitored = false, Status = VideoStatus.Downloaded }));
+            Assert.False(new ArtistActivity().IsQueued(new MusicVideo { Key = "missing" }));
         }
 
         // Answers every call with a default value, for interfaces a test doesn't use
