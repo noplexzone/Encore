@@ -84,10 +84,13 @@ namespace Encore.Http
                                              path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase));
         }
 
+        private static readonly string Version = typeof(UiInjectionMiddleware).Assembly.GetName().Version?.ToString() ?? "0";
+
         public static byte[] Inject(byte[] html, string urlBase)
         {
             var text = Encoding.UTF8.GetString(html);
-            var tag = $"<script src=\"{urlBase}/encore/ui.js\" defer></script>";
+            // Versioned, so a browser that kept an older copy fetches the new one after an update
+            var tag = $"<script src=\"{urlBase}/encore/ui.js?v={Version}\" defer></script>";
 
             if (text.Contains("/encore/ui.js", StringComparison.Ordinal))
             {

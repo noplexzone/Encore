@@ -11,6 +11,7 @@ namespace Encore.Http
     /// The script added to Lidarr's pages, and what it needs to know about the artist on screen.
     /// </summary>
     [Route("encore")]
+    [NoCache]
     public class EncoreController : Controller
     {
         private readonly IArtistService _artistService;

@@ -55,6 +55,7 @@ namespace Encore.MusicVideos
         void Search(Artist artist, string? videoKey);
         void AddUrl(Artist artist, string url);
         void SetMonitored(Artist artist, string? videoKey, bool monitored);
+        int SetMonitoredEverywhere(bool monitored);
         void DeleteVideo(Artist artist, string videoKey);
     }
 
@@ -265,6 +266,22 @@ namespace Encore.MusicVideos
             }
         }
 
+        /// <summary>
+        /// Monitors or unmonitors every artist's videos, and the ones found later. Returns how many artists.
+        /// </summary>
+        public int SetMonitoredEverywhere(bool monitored)
+        {
+            var settings = RequireSettings();
+            var artists = _artistService.GetAllArtists().Where(a => Directory.Exists(a.Path)).ToList();
+
+            foreach (var artist in artists)
+            {
+                SetMonitored(artist, null, monitored);
+            }
+
+            return artists.Count;
+        }
+
         // Stops the download that's running if a search picked it because it was monitored
         private void StopDownload(int artistId, string? videoKey)
         {
@@ -413,9 +430,9 @@ namespace Encore.MusicVideos
                 return;
             }
 
-            foreach (var artistId in message.ArtistIds)
+            for (var i = 0; i < message.ArtistIds.Count; i++)
             {
-                var artist = FindArtist(artistId);
+                var artist = FindArtist(message.ArtistIds[i]);
 
                 if (artist == null || !Directory.Exists(artist.Path))
                 {
@@ -424,7 +441,9 @@ namespace Encore.MusicVideos
 
                 try
                 {
-                    Refresh(artist, settings);
+                    // Lidarr refreshes artists one task each, so the ones still queued count too
+                    var left = message.ArtistIds.Count - i - 1 + QueuedRefreshes();
+                    Refresh(artist, settings, left > 0 ? $" ({left} more {(left == 1 ? "artist" : "artists")} after this)" : string.Empty);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException && message.ArtistIds.Count > 1)
                 {
@@ -437,9 +456,16 @@ namespace Encore.MusicVideos
             }
         }
 
-        private void Refresh(Artist artist, MusicVideosSettings settings)
+        private int QueuedRefreshes() =>
+            _commandQueue.All()
+                .Where(c => c.Status == CommandStatus.Queued)
+                .Select(c => c.Body)
+                .OfType<MusicVideoRefreshCommand>()
+                .Sum(c => c.ArtistIds.Count);
+
+        private void Refresh(Artist artist, MusicVideosSettings settings, string position)
         {
-            _logger.ProgressInfo("Refreshing music videos for {0}", artist.Name);
+            _logger.ProgressInfo("Refreshing music videos for {0}{1}", artist.Name, position);
             SetRefreshing($"Looking for videos by {artist.Name}", artist.Id);
 
             var removed = 0;
