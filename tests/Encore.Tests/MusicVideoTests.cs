@@ -73,8 +73,48 @@ namespace Encore.Tests
         [InlineData("Simon & Garfunkel - The Boxer (Official Video) | HD", "Simon and Garfunkel", "The Boxer")]
         [InlineData("Jay-Z - 99 Problems", "Jay-Z", "99 Problems")]
         [InlineData("Someone Else - Wonderwall (Official Video)", "Oasis", "Someone Else - Wonderwall")]
+        [InlineData("Juice WRLD: Party By Myself", "Juice WRLD", "Party By Myself")]
         public void Titles_are_cleaned(string title, string artist, string expected) =>
             Assert.Equal(expected, VideoTitles.CleanTitle(title, artist));
+
+        [Theory]
+        [InlineData("Juice WRLD: Aquafina music video BTS", "Juice WRLD", true)]
+        [InlineData("SHOOTING A MUSIC VIDEO WITH KID LAROI", "Juice WRLD", true)]
+        [InlineData("SoFaygo Music Video Shoot", "Juice WRLD", true)]
+        [InlineData("Juice WRLD: Doubting Me (Studio Session) [Part 1]", "Juice WRLD", true)]
+        [InlineData("BTS (방탄소년단) 'Dynamite' Official MV", "BTS", false)]
+        [InlineData("Juice WRLD - Lucid Dreams (Official Music Video)", "Juice WRLD", false)]
+        public void Footage_around_videos_is_recognised(string title, string artist, bool expected) =>
+            Assert.Equal(expected, VideoTitles.IsExtra(title, artist));
+
+        [Fact]
+        public void Tidy_drops_other_artists_extras_and_second_copies()
+        {
+            var juice = new Artist { Id = 4 };
+            juice.Metadata = new NzbDrone.Core.Datastore.LazyLoaded<ArtistMetadata>(new ArtistMetadata { Name = "Juice WRLD" });
+            var finder = new VideoFinder(Stub<IMusicBrainz>.Create(), TrackStub.With("Lucid Dreams", "Daisy"), LogManager.CreateNullLogger());
+            var settings = new MusicVideosSettings { IncludeLive = true };
+
+            MusicVideo Channel(string title, VideoStatus status = VideoStatus.Wanted) =>
+                new() { Key = title, SourceTitle = title, Title = title, Kind = VideoTitles.Classify(title + " (Official Video)"), Source = VideoFinder.SourceChannel, Status = status };
+
+            var videos = new List<MusicVideo>
+            {
+                Channel("Juice WRLD: Party By Myself"),
+                Channel("Party By Myself"),
+                Channel("GiGi Holland (MOST BEAUTIFUL GANGSTER) Official Music Video"),
+                Channel("Trippie Redd “Buzz” official music video"),
+                Channel("Juice WRLD: Aquafina music video BTS"),
+                Channel("Lucid Dreams (Jimmy Kimmel Live! 2018)"),
+                Channel("Lucid Dreams (Jimmy Kimmel Live!/2018)"),
+                Channel("Backandivth - Daisy music video", VideoStatus.Downloaded),
+                Channel("Daisy")
+            };
+
+            var kept = finder.Tidy(juice, settings, videos).Select(v => v.SourceTitle).ToList();
+
+            Assert.Equal(["Juice WRLD: Party By Myself", "Lucid Dreams (Jimmy Kimmel Live! 2018)", "Backandivth - Daisy music video", "Daisy"], kept);
+        }
 
         [Fact]
         public void Normalize_ignores_case_accents_punctuation_and_featured_artists()
@@ -335,6 +375,30 @@ namespace Encore.Tests
             Assert.Equal([false, false, true], videos.Select(v => v.Monitored));
             Assert.Equal([VideoStatus.Wanted, VideoStatus.Downloaded, VideoStatus.Wanted], videos.Select(v => v.Status));
             Assert.True(store.Load(_artist, settings).MonitorNew);
+        }
+
+        // Answers every call with a default value, for interfaces a test doesn't use
+        public class Stub<T> : System.Reflection.DispatchProxy
+        {
+            public static T Create() => Create<T, Stub<T>>();
+
+            protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args) =>
+                method!.ReturnType.IsValueType && method.ReturnType != typeof(void) ? Activator.CreateInstance(method.ReturnType) : null;
+        }
+
+        public class TrackStub : System.Reflection.DispatchProxy
+        {
+            private List<Track> _tracks = [];
+
+            public static ITrackService With(params string[] titles)
+            {
+                var service = System.Reflection.DispatchProxy.Create<ITrackService, TrackStub>();
+                ((TrackStub)(object)service)._tracks = titles.Select(t => new Track { Title = t }).ToList();
+                return service;
+            }
+
+            protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args) =>
+                method!.Name == nameof(ITrackService.GetTracksByArtist) ? _tracks : null;
         }
 
         private static string? After(List<string> args, string flag)

@@ -17,6 +17,14 @@ namespace Encore.MusicVideos.Videos
             @"\b(teaser|trailer|reaction|behind the scenes|making of|the making|interview|snippet|preview|tiktok|karaoke|8d audio|sped ?up|slowed|nightcore|fan ?made|unofficial|full album|album stream|playlist|commentary|tutorial|episode|documentary|announcement)\b|#shorts\b",
             Options);
 
+        // Footage around a video or a recording rather than the video itself
+        private static readonly Regex Extra = new(
+            @"\b(studio sessions?|in the studio|video shoot|shooting (a|the) (music )?video|on set|vlog|recap)\b",
+            Options);
+
+        // "BTS" is behind the scenes, unless the artist is the band
+        private static readonly Regex BehindTheScenes = new(@"\bbts\b", Options);
+
         private static readonly Regex Audio = new(
             @"\b(official audio|audio only|visuali[sz]er|visual ?loop|static video|art ?track)\b|[\(\[]\s*audio\s*[\)\]]",
             Options);
@@ -45,7 +53,7 @@ namespace Encore.MusicVideos.Videos
 
         private static readonly Regex Featuring = new(@"\s*[\(\[]?\b(feat|ft|featuring)\b\.?\s.*?([\)\]]|$)", Options);
 
-        private static readonly Regex Dash = new(@"\s+[-–—:]\s+|\s[-–—]|[-–—]\s", Options);
+        private static readonly Regex Dash = new(@"\s+[-–—:]\s+|\s[-–—]|[-–—:]\s", Options);
 
         private static readonly Regex UltraHd = new(@"\b(8k|4k|2160p|uhd)\b", Options);
         private static readonly Regex Remaster = new(@"\b(remaster(ed)?|restored|upgrade[d]?)\b", Options);
@@ -57,6 +65,12 @@ namespace Encore.MusicVideos.Videos
         /// </summary>
         public static int QualityHint(string title) =>
             (UltraHd.IsMatch(title) ? 3 : 0) + (Remaster.IsMatch(title) ? 2 : 0) + (Hd.IsMatch(title) ? 1 : 0);
+
+        /// <summary>
+        /// Behind the scenes, studio sessions and the like, which artists post next to their videos.
+        /// </summary>
+        public static bool IsExtra(string title, string artistName) =>
+            Extra.IsMatch(title) || (BehindTheScenes.IsMatch(title) && Normalize(artistName) != "bts");
 
         public static VideoKind Classify(string title)
         {

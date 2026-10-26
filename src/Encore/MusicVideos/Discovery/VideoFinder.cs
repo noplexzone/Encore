@@ -11,6 +11,7 @@ namespace Encore.MusicVideos.Discovery
     public interface IVideoFinder
     {
         FindResult Find(Artist artist, MusicVideosSettings settings, VideoState state, ToolPaths tools, CancellationToken cancellationToken);
+        List<MusicVideo> Tidy(Artist artist, MusicVideosSettings settings, List<MusicVideo> videos);
         List<MusicVideo> FromCollection(Artist artist, MusicVideosSettings settings, string url, string source, ToolPaths tools, CancellationToken cancellationToken);
     }
 
@@ -24,6 +25,7 @@ namespace Encore.MusicVideos.Discovery
         public const string SourceMusicBrainz = "MusicBrainz";
         public const string SourceSearch = "YouTube search";
         public const string SourceChannel = "YouTube channel";
+        public const string SourceByHand = "Added by hand";
 
         // Each MusicBrainz lookup costs a second, so a large catalogue is worked through over several searches
         private const int MaxRecordingLookups = 60;
@@ -31,6 +33,7 @@ namespace Encore.MusicVideos.Discovery
         private const int MinSeconds = 60;
         private const int MaxSeconds = 20 * 60;
 
+        private static readonly Regex Brackets = new(@"[\(\[\{][^\)\]\}]*[\)\]\}]");
         private static readonly Regex OtherVideoSite = new(@"^https?://(www\.)?(vimeo\.com/\d+|dailymotion\.com/video/)", RegexOptions.IgnoreCase);
 
         private readonly IMusicBrainz _musicBrainz;
@@ -183,14 +186,9 @@ namespace Encore.MusicVideos.Discovery
 
         private List<MusicVideo> Filter(Artist artist, MusicVideosSettings settings, VideoState state, List<MusicVideo> found)
         {
-            HashSet<string>? library = null;
+            var library = LibraryTitles(artist);
 
-            if (settings.OnlyLibraryTracks)
-            {
-                library = _trackService.GetTracksByArtist(artist.Id).Select(t => VideoTitles.Normalize(t.Title)).ToHashSet();
-            }
-
-            // Already known videos, ignored ones included, so the same song from another channel isn't offered again
+            // Already known videos, unmonitored ones included, so the same song from another channel isn't offered again
             var keys = state.Videos.Select(v => v.Key).ToHashSet();
             var songs = state.Videos.Select(SongKey).ToHashSet();
             var result = new List<MusicVideo>();
@@ -198,20 +196,7 @@ namespace Encore.MusicVideos.Discovery
             // Stable, so sources keep their order between copies that promise the same quality
             foreach (var video in found.OrderByDescending(v => VideoTitles.QualityHint(v.SourceTitle)))
             {
-                var allowed = video.Kind switch
-                {
-                    VideoKind.Official => true,
-                    VideoKind.Live => settings.IncludeLive,
-                    VideoKind.Lyric => settings.IncludeLyric,
-                    _ => false
-                };
-
-                if (!allowed || (library != null && !library.Contains(VideoTitles.Normalize(video.Title))))
-                {
-                    continue;
-                }
-
-                if (keys.Add(video.Key) && songs.Add(SongKey(video)))
+                if (Accepts(artist, settings, library, video) && keys.Add(video.Key) && songs.Add(SongKey(video)))
                 {
                     result.Add(video);
                 }
@@ -220,10 +205,70 @@ namespace Encore.MusicVideos.Discovery
             return result;
         }
 
+        /// <summary>
+        /// Drops videos found by older versions that today's rules would leave out, and second copies
+        /// of the same song. Downloaded videos and ones added by hand always stay.
+        /// </summary>
+        public List<MusicVideo> Tidy(Artist artist, MusicVideosSettings settings, List<MusicVideo> videos)
+        {
+            var library = LibraryTitles(artist);
+            var songs = new HashSet<string>();
+            var result = new List<MusicVideo>();
+
+            static bool Keep(MusicVideo v) => v.Status == VideoStatus.Downloaded || v.Source == SourceByHand;
+
+            // Titles read with today's rules, so "Artist: Song" and "Song" are seen as the same song
+            foreach (var video in videos.Where(v => v.Source == SourceChannel && !Keep(v)))
+            {
+                video.Title = VideoTitles.CleanTitle(video.SourceTitle, artist.Name);
+            }
+
+            foreach (var video in videos.OrderByDescending(Keep))
+            {
+                if (Keep(video) || (Accepts(artist, settings, library, video) && !songs.Contains(SongKey(video))))
+                {
+                    songs.Add(SongKey(video));
+                    result.Add(video);
+                }
+            }
+
+            // Back in their original order
+            return videos.Where(result.Contains).ToList();
+        }
+
+        private static bool Accepts(Artist artist, MusicVideosSettings settings, HashSet<string> library, MusicVideo video)
+        {
+            var allowed = video.Kind switch
+            {
+                VideoKind.Official => true,
+                VideoKind.Live => settings.IncludeLive,
+                VideoKind.Lyric => settings.IncludeLyric,
+                _ => false
+            };
+
+            if (!allowed || VideoTitles.IsExtra(video.SourceTitle, artist.Name))
+            {
+                return false;
+            }
+
+            // "Song (Live at ...)" counts as the song
+            var inLibrary = library.Contains(VideoTitles.Normalize(video.Title)) ||
+                            library.Contains(VideoTitles.Normalize(Brackets.Replace(video.Title, " ")));
+
+            if (settings.OnlyLibraryTracks && !inLibrary)
+            {
+                return false;
+            }
+
+            // Artist channels also post videos of other artists (label mates, friends), so a channel
+            // upload has to name the artist or be one of the artist's songs
+            return video.Source != SourceChannel || inLibrary || VideoTitles.MentionsArtist(video.SourceTitle, artist.Name);
+        }
+
+        private HashSet<string> LibraryTitles(Artist artist) =>
+            _trackService.GetTracksByArtist(artist.Id).Select(t => VideoTitles.Normalize(t.Title)).ToHashSet();
+
         // Live videos are often several per song, so they're told apart by their full title
-        private static string SongKey(MusicVideo video) =>
-            video.Kind == VideoKind.Live
-                ? $"{video.Kind}:{VideoTitles.Normalize(video.SourceTitle)}"
-                : $"{video.Kind}:{VideoTitles.Normalize(video.Title)}";
+        private static string SongKey(MusicVideo video) => $"{video.Kind}:{VideoTitles.Normalize(video.Title)}";
     }
 }

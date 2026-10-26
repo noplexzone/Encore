@@ -69,9 +69,15 @@ namespace Encore.MusicVideos
         private readonly Logger _logger;
         private readonly string _tempRoot;
 
-        private readonly BlockingCollection<VideoJob> _queue = new();
+        // Downloads go ahead of searches, so an artist's videos arrive right after its search
+        // rather than after every other artist has been searched
+        private readonly BlockingCollection<VideoJob> _downloads = new();
+        private readonly BlockingCollection<VideoJob> _searches = new();
         private readonly ConcurrentDictionary<VideoJob, bool> _pending = new();
         private readonly CancellationTokenSource _shutdown = new();
+        private readonly object _jobLock = new();
+        private VideoJob? _currentJob;
+        private CancellationTokenSource? _currentCancel;
         private readonly WorkerStatus _status = new();
         private readonly object _startLock = new();
         private Thread? _worker;
@@ -149,6 +155,30 @@ namespace Encore.MusicVideos
             if (monitored)
             {
                 QueueWanted(artist, settings);
+            }
+            else
+            {
+                StopDownloads(artist.Id, videoKey);
+            }
+        }
+
+        // Drops queued downloads of videos that were just unmonitored, and stops the one running
+        private void StopDownloads(int artistId, string? videoKey)
+        {
+            bool Matches(VideoJob job) =>
+                job.ArtistId == artistId && job.VideoKey != null && (videoKey == null || job.VideoKey == videoKey);
+
+            foreach (var job in _pending.Keys.Where(Matches))
+            {
+                _pending.TryRemove(job, out _);
+            }
+
+            lock (_jobLock)
+            {
+                if (_currentJob != null && Matches(_currentJob))
+                {
+                    _currentCancel?.Cancel();
+                }
             }
         }
 
@@ -235,7 +265,8 @@ namespace Encore.MusicVideos
         {
             _shutdown.Cancel();
             _timer?.Dispose();
-            _queue.CompleteAdding();
+            _downloads.CompleteAdding();
+            _searches.CompleteAdding();
         }
 
         public void Handle(ArtistAddedEvent message)
@@ -259,9 +290,11 @@ namespace Encore.MusicVideos
 
         private void Enqueue(VideoJob job)
         {
-            if (!_queue.IsAddingCompleted && _pending.TryAdd(job, true))
+            var queue = job.VideoKey != null ? _downloads : _searches;
+
+            if (!queue.IsAddingCompleted && _pending.TryAdd(job, true))
             {
-                _queue.Add(job);
+                queue.Add(job);
             }
         }
 
@@ -301,22 +334,40 @@ namespace Encore.MusicVideos
 
         private void Work()
         {
+            var queues = new[] { _downloads, _searches };
+
             try
             {
-                foreach (var job in _queue.GetConsumingEnumerable(_shutdown.Token))
+                while (!_shutdown.IsCancellationRequested)
                 {
+                    BlockingCollection<VideoJob>.TakeFromAny(queues, out var job, _shutdown.Token);
+
+                    // Gone from the queue while it waited, because the video was unmonitored
+                    if (!_pending.ContainsKey(job))
+                    {
+                        continue;
+                    }
+
+                    using var cancel = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+
+                    lock (_jobLock)
+                    {
+                        _currentJob = job;
+                        _currentCancel = cancel;
+                    }
+
                     try
                     {
-                        Run(job);
+                        Run(job, cancel.Token);
 
                         lock (_status)
                         {
                             _status.LastError = null;
                         }
                     }
-                    catch (OperationCanceledException)
+                    catch (OperationCanceledException) when (!_shutdown.IsCancellationRequested)
                     {
-                        return;
+                        _logger.Info("Music videos: stopped {0}, it was unmonitored", job);
                     }
                     catch (Exception ex)
                     {
@@ -329,6 +380,12 @@ namespace Encore.MusicVideos
                     }
                     finally
                     {
+                        lock (_jobLock)
+                        {
+                            _currentJob = null;
+                            _currentCancel = null;
+                        }
+
                         _pending.TryRemove(job, out _);
                         SetActivity(null, null, null);
                     }
@@ -339,7 +396,7 @@ namespace Encore.MusicVideos
             }
         }
 
-        private void Run(VideoJob job)
+        private void Run(VideoJob job, CancellationToken cancellationToken)
         {
             var settings = Settings;
             var artist = FindArtist(job.ArtistId);
@@ -357,27 +414,29 @@ namespace Encore.MusicVideos
 
             if (job.SourceUrl != null)
             {
-                AddUrl(artist, job.SourceUrl, settings);
+                AddUrl(artist, job.SourceUrl, settings, cancellationToken);
             }
             else if (job.IsSearch)
             {
-                Search(artist, settings);
+                Search(artist, settings, cancellationToken);
             }
             else
             {
-                Download(artist, job.VideoKey!, settings);
+                Download(artist, job.VideoKey!, settings, cancellationToken);
             }
         }
 
-        private void Search(Artist artist, MusicVideosSettings settings)
+        private void Search(Artist artist, MusicVideosSettings settings, CancellationToken cancellationToken)
         {
             SetActivity($"Looking for videos by {artist.Name}", artist.Id, null);
-            var tools = _tools.Resolve(settings, _shutdown.Token);
+            var tools = _tools.Resolve(settings, cancellationToken);
             var state = _store.Load(artist, settings);
-            var result = _finder.Find(artist, settings, state, tools, _shutdown.Token);
+            var result = _finder.Find(artist, settings, state, tools, cancellationToken);
 
             _store.Update(artist, settings, s =>
             {
+                s.Videos = _finder.Tidy(artist, settings, s.Videos);
+
                 var known = s.Videos.Select(v => v.Key).ToHashSet();
                 var added = result.Videos.Where(v => !known.Contains(v.Key)).ToList();
                 added.ForEach(v => v.Monitored = s.MonitorNew);
@@ -394,14 +453,14 @@ namespace Encore.MusicVideos
             QueueWanted(artist, settings);
         }
 
-        private void AddUrl(Artist artist, string url, MusicVideosSettings settings)
+        private void AddUrl(Artist artist, string url, MusicVideosSettings settings, CancellationToken cancellationToken)
         {
             SetActivity($"Reading {url}", artist.Id, null);
-            var tools = _tools.Resolve(settings, _shutdown.Token);
+            var tools = _tools.Resolve(settings, cancellationToken);
 
             if (YouTube.IsCollection(url))
             {
-                var videos = _finder.FromCollection(artist, settings, url, VideoFinder.SourceChannel, tools, _shutdown.Token);
+                var videos = _finder.FromCollection(artist, settings, url, VideoFinder.SourceChannel, tools, cancellationToken);
 
                 _store.Update(artist, settings, s =>
                 {
@@ -421,9 +480,9 @@ namespace Encore.MusicVideos
             }
 
             // A single video added by hand is wanted whatever its title says
-            var listed = YtDlp.List(tools, settings, url, 1, _shutdown.Token).FirstOrDefault()
+            var listed = YtDlp.List(tools, settings, url, 1, cancellationToken).FirstOrDefault()
                          ?? throw new InvalidOperationException($"yt-dlp found no video at {url}");
-            var video = VideoFinder.FromListing(artist, listed with { Url = url }, "Added by hand");
+            var video = VideoFinder.FromListing(artist, listed with { Url = url }, VideoFinder.SourceByHand);
             video.Key = YouTube.KeyForUrl(url);
 
             if (video.Kind == VideoKind.Other)
@@ -449,7 +508,7 @@ namespace Encore.MusicVideos
             QueueDownload(artist.Id, video.Key);
         }
 
-        private void Download(Artist artist, string videoKey, MusicVideosSettings settings)
+        private void Download(Artist artist, string videoKey, MusicVideosSettings settings, CancellationToken cancellationToken)
         {
             var video = _store.Load(artist, settings).Videos.FirstOrDefault(v => v.Key == videoKey);
 
@@ -464,8 +523,8 @@ namespace Encore.MusicVideos
 
             try
             {
-                var tools = _tools.Resolve(settings, _shutdown.Token);
-                var result = YtDlp.Download(tools, settings, video.Url, temp, p => SetProgress(p), _shutdown.Token);
+                var tools = _tools.Resolve(settings, cancellationToken);
+                var result = YtDlp.Download(tools, settings, video.Url, temp, p => SetProgress(p), cancellationToken);
 
                 _store.Update(artist, settings, s =>
                 {
