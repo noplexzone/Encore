@@ -261,6 +261,20 @@ namespace Encore.Tests
         }
 
         [Fact]
+        public void YouTube_Music_channels_are_left_out()
+        {
+            using var artist = JsonDocument.Parse("""
+                {"relations": [
+                  {"url": {"resource": "https://music.youtube.com/channel/UC_7s69e1mDS3lgcTMJEPjCg"}},
+                  {"url": {"resource": "https://www.youtube.com/channel/UC_7s69e1mDS3lgcTMJEPjCg"}},
+                  {"url": {"resource": "https://www.youtube.com/channel/UCYvmuw-JtVrTZQ-7Y4kd63Q"}}
+                ]}
+                """);
+
+            Assert.Equal(["https://www.youtube.com/channel/UCYvmuw-JtVrTZQ-7Y4kd63Q"], MusicBrainz.ParseVideoChannels(artist.RootElement));
+        }
+
+        [Fact]
         public void Channel_listings_become_cleaned_videos()
         {
             var video = VideoFinder.FromListing(_artist, new ListedVideo("bx1Bh8ZvH84", "https://www.youtube.com/watch?v=bx1Bh8ZvH84", "Oasis - Wonderwall (Official HD Remastered Video)", 258, "Oasis"), VideoFinder.SourceChannel);

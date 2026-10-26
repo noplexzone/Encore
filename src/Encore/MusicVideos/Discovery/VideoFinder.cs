@@ -60,9 +60,13 @@ namespace Encore.MusicVideos.Discovery
                 {
                     action();
                 }
+                catch (Exception ex) when (ex is not OperationCanceledException && ex.Message.Contains("does not have a videos tab"))
+                {
+                    _logger.Debug("Music videos: {0} has no videos for {1}", what, artist);
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.Warn(ex, "Music videos: {0} failed for {1}", what, artist);
+                    _logger.Warn("Music videos: {0} failed for {1}: {2}", what, artist, ex.Message);
                     problems.Add($"{what}: {ex.Message}");
                 }
             }

@@ -443,8 +443,9 @@ namespace Encore.MusicVideos
                 s.Videos.AddRange(added);
                 s.CheckedRecordings.UnionWith(result.CheckedRecordings);
 
-                // A search that failed outright is tried again a day later rather than after the full interval
-                s.LastSearch = result.Problems.Count > 0 && result.Videos.Count == 0
+                // A search with failed parts (MusicBrainz busy, say) is finished a day later rather than after the
+                // full interval; recordings already looked up aren't asked about again
+                s.LastSearch = result.Problems.Count > 0
                     ? DateTime.UtcNow.AddDays(1 - settings.SearchIntervalDays)
                     : DateTime.UtcNow;
             });
