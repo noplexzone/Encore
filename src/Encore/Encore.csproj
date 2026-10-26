@@ -30,5 +30,6 @@
   <ItemGroup>
     <EmbeddedResource Include="ArtistArt\Web\picker.html" LogicalName="Encore.ArtistArt.picker.html" />
     <EmbeddedResource Include="MusicVideos\Web\videos.html" LogicalName="Encore.MusicVideos.videos.html" />
+    <EmbeddedResource Include="Web\ui.js" LogicalName="Encore.ui.js" />
   </ItemGroup>
 </Project>

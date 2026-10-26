@@ -9,6 +9,7 @@ namespace Encore.Http
     /// Lidarr only registers controllers from its own assemblies. Lidarr's container does pick up
     /// every interface a plugin class implements, including IStartupFilter, so this runs while
     /// the web host builds its pipeline and adds the plugin's controllers before routes are built.
+    /// It also adds the middleware that puts Encore's buttons into Lidarr's own pages.
     /// </summary>
     public class EncoreStartupFilter : IStartupFilter
     {
@@ -24,6 +25,7 @@ namespace Encore.Http
                     partManager.ApplicationParts.Add(new AssemblyPart(assembly));
                 }
 
+                app.UseMiddleware<UiInjectionMiddleware>();
                 next(app);
             };
         }
