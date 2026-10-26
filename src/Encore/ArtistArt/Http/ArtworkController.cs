@@ -1,4 +1,5 @@
 using Encore.ArtistArt.Art;
+using Encore.Http;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ namespace Encore.ArtistArt.Http
     /// </summary>
     [Authorize(Policy = "UI")]
     [Route("artwork")]
+    [NoCache]
     public class ArtworkController : Controller
     {
         private const string ChangeHeader = "X-Encore";

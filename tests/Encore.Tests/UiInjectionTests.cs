@@ -48,7 +48,8 @@ namespace Encore.Tests
             var html = Encoding.UTF8.GetBytes("<html><body><div id=\"root\"></div></body></html>");
             var result = Encoding.UTF8.GetString(UiInjectionMiddleware.Inject(html, "/lidarr"));
 
-            Assert.Equal("<html><body><div id=\"root\"></div><script src=\"/lidarr/encore/ui.js\" defer></script></body></html>", result);
+            var version = typeof(UiInjectionMiddleware).Assembly.GetName().Version;
+            Assert.Equal($"<html><body><div id=\"root\"></div><script src=\"/lidarr/encore/ui.js?v={version}\" defer></script></body></html>", result);
         }
 
         [Fact]

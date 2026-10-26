@@ -1,7 +1,8 @@
+using Encore.Http;
 using Encore.MusicVideos.Videos;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Music;
@@ -14,6 +15,7 @@ namespace Encore.MusicVideos.Http
     /// </summary>
     [Authorize(Policy = "UI")]
     [Route("videos")]
+    [NoCache]
     public class VideosController : Controller
     {
         private const string ChangeHeader = "X-Encore";
@@ -162,6 +164,28 @@ namespace Encore.MusicVideos.Http
         [HttpPost("api/{artistId:int}/monitor")]
         public IActionResult Monitor(int artistId, [FromBody] VideoRequest request) =>
             Change(artistId, artist => _videoService.SetMonitored(artist, request.Key, request.Monitored ?? throw new InvalidOperationException("Missing monitored")));
+
+        // Every artist at once, and the videos found later
+        [HttpPost("api/monitor-all")]
+        public IActionResult MonitorAll([FromBody] VideoRequest request)
+        {
+            if (!Request.Headers.ContainsKey(ChangeHeader))
+            {
+                return BadRequest($"Missing {ChangeHeader} header");
+            }
+
+            if (_videoService.Settings == null)
+            {
+                return Problem(NotEnabled, statusCode: 409);
+            }
+
+            if (request.Monitored == null)
+            {
+                return Problem("Missing monitored", statusCode: 400);
+            }
+
+            return Ok(new { artists = _videoService.SetMonitoredEverywhere(request.Monitored.Value) });
+        }
 
         [HttpPost("api/{artistId:int}/delete")]
         public IActionResult Delete(int artistId, [FromBody] VideoRequest request) =>

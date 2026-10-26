@@ -107,7 +107,7 @@ Each artist page gets a **Music Videos** section below Albums and Singles that w
 - **Refresh & Scan** also looks for new music videos.
 - Albums, Singles and the other sections get a search icon too, which searches the monitored releases of that section only.
 
-**Manage music videos** at the bottom opens the full page. All artists are at `http://<lidarr>/videos`. On the full page:
+**Manage music videos** at the bottom opens the full page. All artists are at `http://<lidarr>/videos`, with **Monitor all** and **Unmonitor all** for every artist's videos at once. On an artist's page:
 
 - **Refresh** looks for new videos straight away, and **Search monitored** downloads the missing ones.
 - **Unmonitor** stops a video from being downloaded. **Delete** removes the file and unmonitors it.

@@ -171,7 +171,20 @@
       search.addEventListener('input', render);
       render();
       main.innerHTML = '';
-      main.appendChild(el('div', { 'class': 'panel' }, [search, list]));
+      function monitorAll(monitored) {
+        var what = monitored ? 'Monitor' : 'Unmonitor';
+        if (!confirm(what + ' every music video of every artist, and the ones found later?')) return;
+        request('POST', '/monitor-all', { monitored: monitored })
+          .then(function (r) { toast(what + 'ed the videos of ' + r.artists + ' artists'); showArtists(); })
+          .catch(function (err) { toast(err.message, 'error'); });
+      }
+      var bulk = el('p', { 'class': 'hint' }, [
+        el('button', { 'class': 'action', text: 'Monitor all', onclick: function () { monitorAll(true); } }),
+        document.createTextNode(' '),
+        el('button', { 'class': 'action', text: 'Unmonitor all', onclick: function () { monitorAll(false); } }),
+        document.createTextNode(' Every artist\'s videos at once, including ones found later.')
+      ]);
+      main.appendChild(el('div', { 'class': 'panel' }, [bulk, search, list]));
     }).catch(fail);
   }
 
