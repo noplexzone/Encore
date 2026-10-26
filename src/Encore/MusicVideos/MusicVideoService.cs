@@ -38,7 +38,9 @@ namespace Encore.MusicVideos
         void QueueSearch(int artistId);
         void QueueDownload(int artistId, string videoKey);
         void QueueAddUrl(int artistId, string url);
-        void SetStatus(Artist artist, string videoKey, VideoStatus status);
+        void SetMonitored(Artist artist, string? videoKey, bool monitored);
+        void DownloadNow(Artist artist, string videoKey);
+        void DownloadMissing(Artist artist);
         void DeleteVideo(Artist artist, string videoKey);
     }
 
@@ -125,16 +127,75 @@ namespace Encore.MusicVideos
 
         public void QueueAddUrl(int artistId, string url) => Enqueue(new VideoJob(artistId, null, url));
 
-        public void SetStatus(Artist artist, string videoKey, VideoStatus status)
+        /// <summary>
+        /// Monitors or unmonitors one video, or with no key all of them and the ones found later.
+        /// </summary>
+        public void SetMonitored(Artist artist, string? videoKey, bool monitored)
         {
             var settings = RequireSettings();
             _store.Update(artist, settings, state =>
             {
-                var video = state.Videos.FirstOrDefault(v => v.Key == videoKey) ?? throw new KeyNotFoundException("Unknown video");
-                video.Status = status;
-                video.Error = null;
+                if (videoKey == null)
+                {
+                    state.MonitorNew = monitored;
+                    state.Videos.ForEach(v => v.Monitored = monitored);
+                }
+                else
+                {
+                    Find(state, videoKey).Monitored = monitored;
+                }
             });
+
+            if (monitored)
+            {
+                QueueWanted(artist, settings);
+            }
         }
+
+        /// <summary>
+        /// Like an album's search button: monitors the video and downloads it now.
+        /// </summary>
+        public void DownloadNow(Artist artist, string videoKey)
+        {
+            var settings = RequireSettings();
+            _store.Update(artist, settings, state =>
+            {
+                var video = Find(state, videoKey);
+                video.Monitored = true;
+                video.Error = null;
+
+                if (video.Status == VideoStatus.Failed)
+                {
+                    video.Status = VideoStatus.Wanted;
+                }
+            });
+
+            QueueDownload(artist.Id, videoKey);
+        }
+
+        /// <summary>
+        /// Downloads every monitored video that's missing, failed ones included, whatever Auto Download says.
+        /// </summary>
+        public void DownloadMissing(Artist artist)
+        {
+            var settings = RequireSettings();
+            var keys = new List<string>();
+
+            _store.Update(artist, settings, state =>
+            {
+                foreach (var video in state.Videos.Where(v => v.Monitored && v.Status is VideoStatus.Wanted or VideoStatus.Failed))
+                {
+                    video.Status = VideoStatus.Wanted;
+                    video.Error = null;
+                    keys.Add(video.Key);
+                }
+            });
+
+            keys.ForEach(key => QueueDownload(artist.Id, key));
+        }
+
+        private static MusicVideo Find(VideoState state, string videoKey) =>
+            state.Videos.FirstOrDefault(v => v.Key == videoKey) ?? throw new KeyNotFoundException("Unknown video");
 
         public void DeleteVideo(Artist artist, string videoKey)
         {
@@ -148,7 +209,8 @@ namespace Encore.MusicVideos
                 video.DownloadedAt = null;
 
                 // Deleting a video means it isn't wanted, or the next search would just get it again
-                video.Status = VideoStatus.Ignored;
+                video.Status = VideoStatus.Wanted;
+                video.Monitored = false;
             });
         }
 
@@ -224,13 +286,10 @@ namespace Encore.MusicVideos
                     {
                         QueueSearch(artist.Id);
                     }
-                    else if (settings.AutoDownload)
+                    else
                     {
                         // Retry wanted videos that weren't downloaded yet, for example after a restart
-                        foreach (var video in state.Videos.Where(v => v.Status == VideoStatus.Wanted))
-                        {
-                            QueueDownload(artist.Id, video.Key);
-                        }
+                        QueueWanted(artist, settings, state);
                     }
                 }
             }
@@ -320,7 +379,9 @@ namespace Encore.MusicVideos
             _store.Update(artist, settings, s =>
             {
                 var known = s.Videos.Select(v => v.Key).ToHashSet();
-                s.Videos.AddRange(result.Videos.Where(v => !known.Contains(v.Key)));
+                var added = result.Videos.Where(v => !known.Contains(v.Key)).ToList();
+                added.ForEach(v => v.Monitored = s.MonitorNew);
+                s.Videos.AddRange(added);
                 s.CheckedRecordings.UnionWith(result.CheckedRecordings);
 
                 // A search that failed outright is tried again a day later rather than after the full interval
@@ -350,7 +411,9 @@ namespace Encore.MusicVideos
                     }
 
                     var known = s.Videos.Select(v => v.Key).ToHashSet();
-                    s.Videos.AddRange(videos.Where(v => known.Add(v.Key) && Allowed(v.Kind, settings)));
+                    var added = videos.Where(v => known.Add(v.Key) && Allowed(v.Kind, settings)).ToList();
+                    added.ForEach(v => v.Monitored = s.MonitorNew);
+                    s.Videos.AddRange(added);
                 });
 
                 QueueWanted(artist, settings);
@@ -375,6 +438,7 @@ namespace Encore.MusicVideos
                 if (existing != null)
                 {
                     existing.Status = existing.File != null ? VideoStatus.Downloaded : VideoStatus.Wanted;
+                    existing.Monitored = true;
                 }
                 else
                 {
@@ -389,7 +453,8 @@ namespace Encore.MusicVideos
         {
             var video = _store.Load(artist, settings).Videos.FirstOrDefault(v => v.Key == videoKey);
 
-            if (video == null || video.Status is VideoStatus.Ignored)
+            // Unmonitored while it waited in the queue
+            if (video == null || !video.Monitored)
             {
                 return;
             }
@@ -435,14 +500,17 @@ namespace Encore.MusicVideos
             }
         }
 
-        private void QueueWanted(Artist artist, MusicVideosSettings settings)
+        // Automatic downloads follow Lidarr's monitoring, like albums: the artist and the video both monitored
+        private void QueueWanted(Artist artist, MusicVideosSettings settings, VideoState? state = null)
         {
-            if (!settings.AutoDownload)
+            if (!settings.AutoDownload || !artist.Monitored)
             {
                 return;
             }
 
-            foreach (var video in _store.Load(artist, settings).Videos.Where(v => v.Status == VideoStatus.Wanted))
+            state ??= _store.Load(artist, settings);
+
+            foreach (var video in state.Videos.Where(v => v.Monitored && v.Status == VideoStatus.Wanted))
             {
                 QueueDownload(artist.Id, video.Key);
             }

@@ -23,7 +23,7 @@ Keeps several images per artist in the artist's own folder and lets you choose w
 
 - Every artist folder gets an `Artwork/` subfolder that holds all candidate images: posters, fanart, banners and logos.
 - On first use, images already in the artist folder (`folder.jpg`, `artist.jpg`, `fanart.jpg` and so on) are copied into `Artwork/`. Lidarr's own downloaded images are also saved there as `poster-lidarr.jpg` etc., so you can always go back to them.
-- The **Artwork** page in Lidarr (`/artwork`, also linked from each artist's Links) shows every candidate. Click one to use it, or upload new ones.
+- The **Artwork** page in Lidarr (`/artwork`, also reached from the **Change image** button that appears when you hover over an artist's image) shows every candidate. Click one to use it, or upload new ones.
 - The chosen image is written to the artist folder for media servers (`artist.*` and `folder.*` for the poster, `fanart.*`, `banner.*`, `logo.*`). It is also written into Lidarr's own image cache, so the Lidarr UI shows it too and Lidarr's metadata refresh does not undo it.
 - Navidrome picks up `artist.*` with its default `ArtistArtPriority`.
 
@@ -32,11 +32,11 @@ Keeps several images per artist in the artist's own folder and lets you choose w
 ## Turning it on
 
 1. Go to **Settings → Metadata** and add **Artist Art**. Saving it turns the feature on.
-2. Set **Settings → General → Application URL** (for example `http://lidarr.local:8686`) so the Artwork link on artist pages points to the right place. You can also set **Picker Address** in the feature's advanced settings instead.
+2. Optional: set **Settings → General → Application URL** (for example `http://lidarr.local:8686`) to also get an Artwork link under each artist's Links. You can also set **Picker Address** in the feature's advanced settings instead.
 
 ## Using it
 
-Open an artist, click **Artwork** under Links, or go to `http://<lidarr>/artwork` and choose an artist.
+Open an artist, hover over the artist image and click **Change image**, or go to `http://<lidarr>/artwork` and choose an artist.
 
 - Click a thumbnail to use it. The badge shows which image is in use.
 - **Add image** uploads a .jpg, .png or .webp file (up to 50 MB) into the artist's `Artwork/` folder.
@@ -86,7 +86,7 @@ Finds each artist's official music videos and downloads them, in the best qualit
   3. The uploads of the artist's YouTube channels that MusicBrainz knows about (their own channel and their VEVO channel), keeping only titles that say they are official videos.
 - **Downloads** with [yt-dlp](https://github.com/yt-dlp/yt-dlp), taking the best video and the best audio stream separately and joining them with ffmpeg. On YouTube that usually means 4K or 1440p AV1/VP9 when the video has it, and Opus audio.
 - **Saves** `Music Videos/<Artist> - <Title>.mkv` in the artist folder, with `<name>-thumb.jpg` and a Kodi-style `<name>.nfo` that Jellyfin, Emby and Kodi read. Files are always `.mkv` or `.mp4`, never `.webm`: Navidrome treats `.webm` and `.mka` as songs, but ignores `.mkv` and `.mp4`. Lidarr ignores them too.
-- **Keeps track** in `musicvideos.json` in the video folder, so ignored and downloaded videos survive a Lidarr reinstall.
+- **Keeps track** in `musicvideos.json` in the video folder, so monitoring and downloaded videos survive a Lidarr reinstall.
 - Each artist is searched when it is added and again every 7 days. Videos already found are never offered twice, even from another channel.
 
 ## Turning it on
@@ -94,15 +94,21 @@ Finds each artist's official music videos and downloads them, in the best qualit
 1. Go to **Settings → Metadata** and enable **Music Videos**. Saving it turns the feature on and starts the first searches a couple of minutes later.
 2. Encore downloads yt-dlp (and keeps it updated daily), ffmpeg if there isn't one on the system, and deno, a JavaScript runtime YouTube now needs for its full format list. They go in `<Lidarr data folder>/Encore/bin`.
    - On Alpine-based Docker images (for example linuxserver/lidarr), deno has no build, so install a runtime once: `apk add nodejs` (or `deno` if your Alpine has it). Without one, YouTube may only offer low quality formats, and the Videos page says so.
-3. Set **Settings → General → Application URL** so the Videos link on artist pages points to the right place.
+3. Optional: set **Settings → General → Application URL** to also get a Videos link under each artist's Links.
 
 ## Using it
 
-Open an artist and click **Videos** under Links, or go to `http://<lidarr>/videos`.
+Each artist page gets a **Music Videos** section below Albums and Singles that works like them:
+
+- The bookmark on each video monitors or unmonitors it. The bookmark in the section header does all of them at once, and also decides whether videos found later start out monitored.
+- The search icon on a video downloads it now. The search icon in the header looks for new videos and downloads the monitored ones that are missing.
+- Monitored videos download automatically while the artist is monitored, like albums.
+
+**Manage music videos** at the bottom opens the full page. All artists are at `http://<lidarr>/videos`. On the full page:
 
 - **Search now** looks for new videos straight away.
-- Found videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
-- **Ignore** stops a video from being downloaded. **Delete** removes the file and ignores it.
+- Monitored videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
+- **Unmonitor** stops a video from being downloaded. **Delete** removes the file and unmonitors it.
 - **Add** takes a video address (downloaded whatever its title says) or a channel or playlist address (scanned now and on every search).
 - **Play** plays a downloaded video in the browser, if the browser supports its codecs.
 
