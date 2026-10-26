@@ -87,11 +87,12 @@ Finds each artist's official music videos and downloads them, in the best qualit
 - **Downloads** with [yt-dlp](https://github.com/yt-dlp/yt-dlp), taking the best video and the best audio stream separately and joining them with ffmpeg. On YouTube that usually means 4K or 1440p AV1/VP9 when the video has it, and Opus audio.
 - **Saves** `Music Videos/<Artist> - <Title>.mkv` in the artist folder, with `<name>-thumb.jpg` and a Kodi-style `<name>.nfo` that Jellyfin, Emby and Kodi read. Files are always `.mkv` or `.mp4`, never `.webm`: Navidrome treats `.webm` and `.mka` as songs, but ignores `.mkv` and `.mp4`. Lidarr ignores them too.
 - **Keeps track** in `musicvideos.json` in the video folder, so monitoring and downloaded videos survive a Lidarr reinstall.
-- Each artist is searched when it is added and again every 7 days. Videos already found are never offered twice, even from another channel.
+- **Works like albums.** Videos are looked for again whenever Lidarr refreshes the artist, which drops ones that no longer fit and adds new ones. Monitored videos that are missing are downloaded when you search: the artist (**Search Monitored**), the Music Videos section, or one video. Nothing downloads on its own. Videos already found are never offered twice, even from another channel.
+- **Shows its progress** at the bottom left of Lidarr and under **System → Tasks**, like Lidarr's own refreshes and searches.
 
 ## Turning it on
 
-1. Go to **Settings → Metadata** and enable **Music Videos**. Saving it turns the feature on and starts the first searches a couple of minutes later.
+1. Go to **Settings → Metadata** and enable **Music Videos**. Saving it turns the feature on and looks for every artist's videos once. Choose whether new videos start out monitored with **Monitor New Videos**.
 2. Encore downloads yt-dlp (and keeps it updated daily), ffmpeg if there isn't one on the system, and deno, a JavaScript runtime YouTube now needs for its full format list. They go in `<Lidarr data folder>/Encore/bin`.
    - On Alpine-based Docker images (for example linuxserver/lidarr), deno has no build, so install a runtime once: `apk add nodejs` (or `deno` if your Alpine has it). Without one, YouTube may only offer low quality formats, and the Videos page says so.
 3. Optional: set **Settings → General → Application URL** to also get a Videos link under each artist's Links.
@@ -100,16 +101,17 @@ Finds each artist's official music videos and downloads them, in the best qualit
 
 Each artist page gets a **Music Videos** section below Albums and Singles that works like them:
 
-- The bookmark on each video monitors or unmonitors it. The bookmark in the section header does all of them at once, and also decides whether videos found later start out monitored.
-- The search icon on a video downloads it now. The search icon in the header looks for new videos and downloads the monitored ones that are missing.
-- Monitored videos download automatically while the artist is monitored, like albums.
+- The bookmark on each video monitors or unmonitors it. The bookmark in the section header does all of them at once, and also decides whether this artist's videos found later start out monitored.
+- The search icon on a video downloads it now. The search icon in the header downloads all the monitored videos that are missing.
+- **Search Monitored** at the top of the artist page searches the albums and the music videos.
+- **Refresh & Scan** also looks for new music videos.
+- Albums, Singles and the other sections get a search icon too, which searches the monitored releases of that section only.
 
 **Manage music videos** at the bottom opens the full page. All artists are at `http://<lidarr>/videos`. On the full page:
 
-- **Search now** looks for new videos straight away.
-- Monitored videos download automatically. Turn off **Download Automatically** to pick them yourself with **Download**.
+- **Refresh** looks for new videos straight away, and **Search monitored** downloads the missing ones.
 - **Unmonitor** stops a video from being downloaded. **Delete** removes the file and unmonitors it.
-- **Add** takes a video address (downloaded whatever its title says) or a channel or playlist address (scanned now and on every search).
+- **Add** takes a video address (downloaded whatever its title says) or a channel or playlist address (scanned now and on every refresh).
 - **Play** plays a downloaded video in the browser, if the browser supports its codecs.
 
 ## Settings
@@ -121,12 +123,11 @@ Each artist page gets a **Music Videos** section below Albums and Singles that w
 | Container | MKV | MKV holds every codec. MP4 also works with AV1/VP9 and Opus but some players are pickier |
 | Codecs | Best quality | Most compatible prefers H.264 and AAC, which on YouTube usually means 1080p at most |
 | Max Resolution | No limit | Caps the download, for example at 1080p |
-| Download Automatically | on | Download found videos straight away |
+| Monitor New Videos | on | Whether videos start out monitored when they're found. The header bookmark of an artist's Music Videos section changes it for that artist |
 | Live Videos / Lyric Videos | off | Also get live performances / lyric videos |
 | Only Tracks in Library | off | Only videos for songs on albums in Lidarr |
 | Write NFO / Save Thumbnail | on | Files for Kodi, Jellyfin and Emby |
 | Videos Link | on | Add a Videos link to each artist's Links |
-| Search Every (days) (advanced) | 7 | How often each artist is searched again |
 | Cookies File (advanced) | empty | A `cookies.txt` from a signed-in YouTube account. Premium accounts get higher bitrate 1080p formats, and age-restricted videos work |
 | yt-dlp Path / FFmpeg Path (advanced) | empty | Use your own copies instead of Encore's |
 | Extra yt-dlp Arguments (advanced) | empty | Added to every download, for example `--limit-rate 5M` |
@@ -134,9 +135,10 @@ Each artist page gets a **Music Videos** section below Albums and Singles that w
 
 ## Known limits
 
-- Only one search or download runs at a time, so the first pass over a big library takes a while.
+- Only one music video refresh and one music video search run at a time, so the first pass over a big library takes a while. A long search holds one of Lidarr's three task slots until it's done.
+- Lidarr's scheduled refreshes look for new videos at most once a day per artist. **Refresh & Scan** always does.
 - YouTube's best audio is Opus at about 130 kbps (or 256 kbps AAC/Opus for some Premium formats with cookies). Better copies, such as Blu-ray rips, are not looked for yet.
-- MusicBrainz is asked about at most 60 new video recordings per artist per search, to stay within its rate limit. The rest are picked up by later searches.
+- MusicBrainz is asked about at most 60 new video recordings per artist per refresh, to stay within its rate limit. The rest are picked up by later refreshes.
 
 # Building
 

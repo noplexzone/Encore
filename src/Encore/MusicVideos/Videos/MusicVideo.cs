@@ -40,7 +40,7 @@ namespace Encore.MusicVideos.Videos
         public int? Year { get; set; }
         public VideoStatus Status { get; set; }
 
-        // Like a monitored album: downloaded automatically when missing
+        // Like a monitored album: downloaded by an artist or section search when missing
         public bool Monitored { get; set; } = true;
         public string? File { get; set; }
         public string? Error { get; set; }
@@ -88,12 +88,21 @@ namespace Encore.MusicVideos.Videos
     /// </summary>
     public class VideoState
     {
+        // When the videos were last looked for (named from when that was called a search)
         public DateTime? LastSearch { get; set; }
+
+        // The last look had failed parts (MusicBrainz busy, say), so the next refresh shouldn't wait
+        public bool Incomplete { get; set; }
 
         public List<MusicVideo> Videos { get; set; } = [];
 
-        // Whether videos found from now on start out monitored, set by the section's monitor toggle
-        public bool MonitorNew { get; set; } = true;
+        // Whether videos found from now on start out monitored, when the section's monitor toggle
+        // differs from the Monitor New Videos setting. Empty follows the setting
+        public bool? MonitorNewVideos { get; set; }
+
+        // Only in files from 0.3: always written, so only false says something
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? MonitorNew { get; set; }
 
         // MusicBrainz video recordings already looked up, so a new search only asks about new ones
         public HashSet<string> CheckedRecordings { get; set; } = [];

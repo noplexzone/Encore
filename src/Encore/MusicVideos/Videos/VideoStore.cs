@@ -143,11 +143,20 @@ namespace Encore.MusicVideos.Videos
                     video.Status = video.File != null ? VideoStatus.Downloaded : VideoStatus.Wanted;
                 }
 
+                if (state.MonitorNew == false)
+                {
+                    state.MonitorNewVideos ??= false;
+                }
+
+                state.MonitorNew = null;
+
                 return state;
             }
-            catch (Exception ex)
+            catch (JsonException ex)
             {
-                _logger.Warn(ex, "Unable to read {0}, starting fresh", path);
+                // Kept aside rather than overwritten by the next change
+                _logger.Warn(ex, "Unable to read {0}, starting fresh and keeping the old one as {1}", path, StateFileName + ".bad");
+                File.Move(path, path + ".bad", true);
                 return new VideoState();
             }
         }

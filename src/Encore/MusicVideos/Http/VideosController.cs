@@ -1,6 +1,9 @@
 using Encore.MusicVideos.Videos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using NLog;
+using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Music;
 
 namespace Encore.MusicVideos.Http
@@ -18,6 +21,8 @@ namespace Encore.MusicVideos.Http
 
         private readonly IArtistService _artistService;
         private readonly IVideoStore _store;
+        private static readonly Logger Logger = NzbDroneLogger.GetLogger(typeof(VideosController));
+
         private readonly IMusicVideoService _videoService;
 
         public VideosController(IArtistService artistService, IVideoStore store, IMusicVideoService videoService)
@@ -77,6 +82,7 @@ namespace Encore.MusicVideos.Http
 
             var folderExists = Directory.Exists(artist.Path);
             var state = folderExists ? _store.Load(artist, settings) : new VideoState();
+            var activity = _videoService.Activity(artist.Id);
 
             return Ok(new
             {
@@ -87,8 +93,9 @@ namespace Encore.MusicVideos.Http
                 folderExists,
                 lastSearch = state.LastSearch,
                 monitored = artist.Monitored,
-                monitorNew = state.MonitorNew,
-                searching = _videoService.IsQueued(artist.Id, null),
+                monitorNew = state.MonitorNewVideos ?? settings.MonitorNewVideos,
+                refreshing = activity.Refreshing,
+                searching = activity.SearchingAll,
                 extraSources = state.ExtraSources,
                 videos = state.Videos
                     .OrderBy(v => v.Kind)
@@ -107,7 +114,9 @@ namespace Encore.MusicVideos.Http
                         year = v.Year,
                         status = v.Status.ToString(),
                         monitored = v.Monitored,
-                        queued = _videoService.IsQueued(artist.Id, v.Key),
+                        queued = activity.IsQueued(v),
+                        downloading = activity.DownloadingKey == v.Key,
+                        progress = activity.DownloadingKey == v.Key ? activity.Progress : null,
                         file = v.File,
                         error = v.Error,
                         quality = v.Quality?.ToString(),
@@ -139,30 +148,20 @@ namespace Encore.MusicVideos.Http
             return PhysicalFile(path, type, enableRangeProcessing: true);
         }
 
+        // Looks for the artist's videos again, like refreshing the artist in Lidarr
+        [HttpPost("api/{artistId:int}/refresh")]
+        public IActionResult Refresh(int artistId) =>
+            Change(artistId, artist => _videoService.Refresh(artist));
+
+        // No key downloads every monitored video that's missing; a key downloads that video whatever its state
         [HttpPost("api/{artistId:int}/search")]
-        public IActionResult Search(int artistId) =>
-            Change(artistId, artist => _videoService.QueueSearch(artist.Id));
-
-        [HttpPost("api/{artistId:int}/download")]
-        public IActionResult Download(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist => _videoService.DownloadNow(artist, Required(request.Key)));
-
-        [HttpPost("api/{artistId:int}/download-all")]
-        public IActionResult DownloadAll(int artistId) =>
-            Change(artistId, artist => _videoService.DownloadMissing(artist));
-
-        [HttpPost("api/{artistId:int}/ignore")]
-        public IActionResult Ignore(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist => _videoService.SetMonitored(artist, Required(request.Key), false));
-
-        [HttpPost("api/{artistId:int}/want")]
-        public IActionResult Want(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist => _videoService.SetMonitored(artist, Required(request.Key), true));
+        public IActionResult Search(int artistId, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] VideoRequest? request) =>
+            Change(artistId, artist => _videoService.Search(artist, request?.Key));
 
         // No key monitors or unmonitors all of the artist's videos, and the ones found later
         [HttpPost("api/{artistId:int}/monitor")]
         public IActionResult Monitor(int artistId, [FromBody] VideoRequest request) =>
-            Change(artistId, artist => _videoService.SetMonitored(artist, request.Key, request.Monitored ?? true));
+            Change(artistId, artist => _videoService.SetMonitored(artist, request.Key, request.Monitored ?? throw new InvalidOperationException("Missing monitored")));
 
         [HttpPost("api/{artistId:int}/delete")]
         public IActionResult Delete(int artistId, [FromBody] VideoRequest request) =>
@@ -179,7 +178,7 @@ namespace Encore.MusicVideos.Http
                     throw new InvalidOperationException("Paste a full video, channel or playlist address");
                 }
 
-                _videoService.QueueAddUrl(artist.Id, url);
+                _videoService.AddUrl(artist, url);
             });
 
         private IActionResult Change(int artistId, Action<Artist> change)
@@ -213,6 +212,11 @@ namespace Encore.MusicVideos.Http
             catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
             {
                 return Problem(ex.Message, statusCode: 400);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Music videos: {0} for {1} failed", Request.Path, artist);
+                return Problem(ex.Message, statusCode: 500);
             }
 
             return Artist(artistId);

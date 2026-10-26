@@ -55,8 +55,6 @@ namespace Encore.MusicVideos
                 .Must(f => f.Contains(VideoNaming.TitleToken, StringComparison.OrdinalIgnoreCase))
                 .WithMessage($"Must contain {VideoNaming.TitleToken}");
 
-            RuleFor(c => c.SearchIntervalDays).InclusiveBetween(1, 365);
-
             RuleFor(c => c.LinkBaseUrl)
                 .Must(u => string.IsNullOrWhiteSpace(u) || Uri.TryCreate(u, UriKind.Absolute, out _))
                 .WithMessage("Must be a full address, such as http://192.168.1.10:8686");
@@ -82,8 +80,8 @@ namespace Encore.MusicVideos
         [FieldDefinition(4, Label = "Max Resolution", Type = FieldType.Select, SelectOptions = typeof(MaxResolution))]
         public int MaxResolution { get; set; } = (int)MusicVideos.MaxResolution.Any;
 
-        [FieldDefinition(5, Label = "Download Automatically", Type = FieldType.Checkbox, HelpText = "Download videos as soon as they are found. When off, found videos wait on the Videos page")]
-        public bool AutoDownload { get; set; } = true;
+        [FieldDefinition(5, Label = "Monitor New Videos", Type = FieldType.Checkbox, HelpText = "Monitor videos as they're found, so searching the artist downloads them. The monitor toggle on an artist's Music Videos section changes this for that artist")]
+        public bool MonitorNewVideos { get; set; } = true;
 
         [FieldDefinition(6, Label = "Live Videos", Type = FieldType.Checkbox, HelpText = "Also get live performance videos")]
         public bool IncludeLive { get; set; }
@@ -102,9 +100,6 @@ namespace Encore.MusicVideos
 
         [FieldDefinition(11, Label = "Videos Link", Type = FieldType.Checkbox, HelpText = "Add a 'Videos' link to each artist page")]
         public bool AddArtistLink { get; set; } = true;
-
-        [FieldDefinition(12, Label = "Search Every (days)", Type = FieldType.Number, Advanced = true, HelpText = "How often each artist is checked for new videos")]
-        public int SearchIntervalDays { get; set; } = 7;
 
         [FieldDefinition(13, Label = "Cookies File", Type = FieldType.FilePath, Advanced = true, HelpText = "Netscape cookies.txt from a signed-in YouTube account. Lets yt-dlp get Premium-only higher bitrate formats and age-restricted videos")]
         public string CookiesFile { get; set; } = string.Empty;

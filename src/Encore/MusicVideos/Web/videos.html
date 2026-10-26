@@ -181,7 +181,7 @@
   }
 
   function videoRow(data, v) {
-    var status = v.queued ? 'Queued' : !v.monitored && v.status !== 'Downloaded' ? 'Unmonitored' : v.status;
+    var status = v.downloading ? 'Downloading' : v.queued ? 'Queued' : !v.monitored && v.status !== 'Downloaded' ? 'Unmonitored' : v.status;
     var buttons = [];
     var player = null;
 
@@ -190,15 +190,15 @@
         if (player.firstChild) { player.innerHTML = ''; return; }
         player.appendChild(el('video', { src: base + '/api/' + data.id + '/file?key=' + encodeURIComponent(v.key), controls: '', autoplay: '' }));
       } }));
-      buttons.push(el('button', { 'class': 'action', text: 'Download again', onclick: function () { act('/download', { key: v.key }, 'Queued'); } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Search again', onclick: function () { act('/search', { key: v.key }, 'Queued'); } }));
       buttons.push(el('button', { 'class': 'action', text: 'Delete', onclick: function () {
         if (confirm('Delete ' + v.file + ' and stop getting this video?')) act('/delete', { key: v.key }, 'Deleted');
       } }));
     } else if (!v.monitored) {
-      buttons.push(el('button', { 'class': 'action', text: 'Monitor', onclick: function () { act('/want', { key: v.key }); } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Monitor', onclick: function () { act('/monitor', { key: v.key, monitored: true }); } }));
     } else {
-      if (!v.queued) buttons.push(el('button', { 'class': 'action primary', text: v.status === 'Failed' ? 'Retry' : 'Download', onclick: function () { act('/download', { key: v.key }, 'Queued'); } }));
-      buttons.push(el('button', { 'class': 'action', text: 'Unmonitor', onclick: function () { act('/ignore', { key: v.key }); } }));
+      if (!v.queued && !v.downloading) buttons.push(el('button', { 'class': 'action primary', text: v.status === 'Failed' ? 'Retry' : 'Search', onclick: function () { act('/search', { key: v.key }, 'Queued'); } }));
+      buttons.push(el('button', { 'class': 'action', text: 'Unmonitor', onclick: function () { act('/monitor', { key: v.key, monitored: false }); } }));
     }
 
     var meta = [v.kindLabel, v.source, duration(v.duration), v.year, v.quality, size(v.size)].filter(Boolean).join(' · ');
@@ -245,16 +245,16 @@
       el('h2', {}, [
         el('span', { text: 'Videos' }),
         el('span', { 'class': 'spacer' }),
-        wanted.length ? el('button', { 'class': 'action', text: 'Download all (' + wanted.length + ')', onclick: function () { act('/download-all', null, 'Queued'); } }) : null,
-        el('button', { 'class': 'action', text: data.searching ? 'Searching…' : 'Search now', onclick: function () { act('/search', null, 'Searching for videos'); } })
+        el('button', { 'class': 'action', text: data.refreshing ? 'Refreshing…' : 'Refresh', title: 'Look for new music videos and drop ones that no longer fit', onclick: function () { act('/refresh', null, 'Looking for music videos'); } }),
+        wanted.length ? el('button', { 'class': 'action', text: data.searching ? 'Searching…' : 'Search monitored (' + wanted.length + ')', onclick: function () { act('/search', null, 'Searching'); } }) : null
       ]),
-      el('p', { 'class': 'hint', text: 'Saved in ' + data.folder + '. ' + (data.lastSearch ? 'Last searched ' + new Date(data.lastSearch).toLocaleString() + '.' : 'Not searched yet.') +
+      el('p', { 'class': 'hint', text: 'Saved in ' + data.folder + '. ' + (data.lastSearch ? 'Last refreshed ' + new Date(data.lastSearch).toLocaleString() + '.' : 'Not refreshed yet.') +
         (data.extraSources.length ? ' Also scanning: ' + data.extraSources.join(', ') : '') }),
       add
     ]));
 
     var groups = [
-      { label: 'Found', items: wanted },
+      { label: 'Missing', items: wanted },
       { label: 'Downloaded', items: data.videos.filter(function (v) { return v.status === 'Downloaded'; }) },
       { label: 'Not monitored', items: data.videos.filter(function (v) { return !v.monitored && missing(v); }) }
     ];
@@ -266,7 +266,7 @@
     });
 
     if (!data.videos.length) {
-      main.appendChild(el('p', { 'class': 'empty', text: data.searching ? 'Searching…' : 'No videos yet. Click Search now, or add one by address.' }));
+      main.appendChild(el('p', { 'class': 'empty', text: data.refreshing ? 'Looking for music videos…' : 'No videos yet. Click Refresh, or add one by address.' }));
     }
   }
 

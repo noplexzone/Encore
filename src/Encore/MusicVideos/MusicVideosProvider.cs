@@ -15,8 +15,9 @@ namespace Encore.MusicVideos
         public override string Name => "Music Videos";
 
         public override ProviderMessage Message => new(
-            "Finds official music videos for each artist (MusicBrainz and the artist's YouTube channels) and downloads them " +
-            "with yt-dlp into the artist folder. Open the Videos link on an artist page, or go to /videos on this Lidarr address.",
+            "Finds official music videos for each artist (MusicBrainz and the artist's YouTube channels) when the artist is refreshed, " +
+            "and downloads the monitored ones with yt-dlp into the artist folder when you search the artist, like albums. " +
+            "They're in the Music Videos section of each artist page.",
             ProviderMessageType.Info);
 
         public override MetadataFile FindMetadataFile(Artist artist, string path) => null!;
