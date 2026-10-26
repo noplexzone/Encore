@@ -205,21 +205,26 @@
     var worker = null;
     var timer = null;
     var error = null;
+    var generation = 0;
 
     self.id = id;
     self.node = el('div', { 'class': 'encore-videos' });
 
     function act(path, body) {
+      generation++;
       return request('POST', '/videos/api/' + artist.id + path, body)
         .then(refresh)
         .catch(function (e) { error = e.message; render(); });
     }
 
     function refresh() {
+      // A poll that started before a change mustn't paint over it when it answers late
+      var mine = ++generation;
       return Promise.all([
         request('GET', '/videos/api/' + artist.id),
         request('GET', '/videos/api/status').catch(function () { return null; })
       ]).then(function (results) {
+        if (mine !== generation) return;
         data = results[0];
         worker = results[1];
         error = null;
@@ -244,9 +249,10 @@
     }
 
     function statusText(v) {
+      if (!v.monitored && v.status !== 'Downloaded') return 'Unmonitored';
       if (worker && worker.artistId === artist.id && worker.videoKey === v.key) return 'Downloading' + (worker.progress ? ' ' + worker.progress : '');
       if (v.queued) return 'Queued';
-      if (v.status === 'Wanted') return v.monitored ? 'Missing' : 'Unmonitored';
+      if (v.status === 'Wanted') return 'Missing';
       return v.status;
     }
 

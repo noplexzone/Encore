@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using NLog;
 using NzbDrone.Common.Http;
@@ -22,6 +23,7 @@ namespace Encore.MusicVideos.Discovery
         private const string Api = "https://musicbrainz.org/ws/2";
         private const int PageSize = 100;
         private const int MaxRecordings = 500;
+        private const int MaxAttempts = 4;
 
         private readonly IHttpClient _httpClient;
         private readonly Logger _logger;
@@ -65,11 +67,28 @@ namespace Encore.MusicVideos.Discovery
             return ParseUrls(json.RootElement);
         }
 
-        public static List<string> ParseVideoChannels(JsonElement artist) =>
-            ParseUrls(artist)
-                .Where(Videos.YouTube.IsCollection)
+        /// <summary>
+        /// The artist's YouTube channels. Channels linked as YouTube Music are left out, even when also
+        /// linked on youtube.com: they're the auto-generated artist channels, with releases but no videos tab.
+        /// </summary>
+        public static List<string> ParseVideoChannels(JsonElement artist)
+        {
+            var links = ParseUrls(artist).Where(Videos.YouTube.IsCollection).ToList();
+            var musicOnly = links.Where(IsYouTubeMusic).Select(ChannelId).OfType<string>().ToHashSet(StringComparer.Ordinal);
+
+            return links
+                .Where(l => !IsYouTubeMusic(l) && (ChannelId(l) is not { } id || !musicOnly.Contains(id)))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private static bool IsYouTubeMusic(string url) => url.Contains("music.youtube.com", StringComparison.OrdinalIgnoreCase);
+
+        private static string? ChannelId(string url)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"/channel/(UC[A-Za-z0-9_-]{22})");
+            return match.Success ? match.Groups[1].Value : null;
+        }
 
         public static List<MbRecording> ParseRecordings(JsonElement root)
         {
@@ -130,17 +149,38 @@ namespace Encore.MusicVideos.Discovery
             return result;
         }
 
+        // MusicBrainz answers 503 when it's busy or when this address asks too often, so wait and try again
         private JsonDocument Get(string url)
         {
-            var request = new HttpRequest(url, HttpAccept.Json)
-            {
-                RateLimit = TimeSpan.FromSeconds(1.1),
-                RateLimitKey = "musicbrainz.org"
-            };
+            var wait = TimeSpan.FromSeconds(3);
 
-            _logger.Trace("MusicBrainz: {0}", url);
-            var response = _httpClient.Get(request);
-            return JsonDocument.Parse(response.Content);
+            for (var attempt = 1; ; attempt++)
+            {
+                var request = new HttpRequest(url, HttpAccept.Json)
+                {
+                    RateLimit = TimeSpan.FromSeconds(1.5),
+                    RateLimitKey = "musicbrainz.org",
+                    SuppressHttpErrorStatusCodes = [HttpStatusCode.ServiceUnavailable],
+                    LogHttpError = false
+                };
+
+                _logger.Trace("MusicBrainz: {0}", url);
+                var response = _httpClient.Get(request);
+
+                if (response.StatusCode != HttpStatusCode.ServiceUnavailable)
+                {
+                    return JsonDocument.Parse(response.Content);
+                }
+
+                if (attempt == MaxAttempts)
+                {
+                    throw new HttpException(response);
+                }
+
+                _logger.Debug("MusicBrainz is busy, trying again in {0}s: {1}", wait.TotalSeconds, url);
+                Thread.Sleep(wait);
+                wait *= 2;
+            }
         }
     }
 }

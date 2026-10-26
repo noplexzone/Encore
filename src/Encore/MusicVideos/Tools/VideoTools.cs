@@ -33,6 +33,7 @@ namespace Encore.MusicVideos.Tools
         private readonly Logger _logger;
         private readonly string _binFolder;
         private (DateTime At, string Message)? _ytDlpFailure;
+        private (DateTime At, string Message)? _jsFailure;
 
         public VideoTools(IHttpClient httpClient, IAppFolderInfo appFolderInfo, Logger logger)
         {
@@ -89,11 +90,18 @@ namespace Encore.MusicVideos.Tools
             }
             catch (Exception ex)
             {
-                _logger.Warn(ex, "Music videos: {0}", ex.Message);
+                if (ex is not RepeatedProblemException)
+                {
+                    _logger.Warn("Music videos: {0}", ex.Message);
+                }
+
                 problems.Add(ex.Message);
                 return null;
             }
         }
+
+        // A problem already logged
+        private class RepeatedProblemException(string message) : Exception(message);
 
         private string ResolveYtDlp(MusicVideosSettings settings, CancellationToken cancellationToken)
         {
@@ -198,23 +206,45 @@ namespace Encore.MusicVideos.Tools
                 }
             }
 
-            var local = Path.Combine(_binFolder, Exe("deno"));
-            if (File.Exists(local))
+            foreach (var runtime in new[] { "deno", "bun" })
             {
-                return $"deno:{local}";
+                var installed = Path.Combine(_binFolder, Exe(runtime));
+                if (File.Exists(installed))
+                {
+                    return $"{runtime}:{installed}";
+                }
             }
 
-            var asset = DenoAsset() ?? throw new PlatformNotSupportedException(
-                "No JavaScript runtime found, so YouTube may only offer low quality formats. Install deno, node or quickjs " +
-                "(on Alpine-based Docker images: apk add nodejs).");
+            // A failed install is retried once a day, not for every artist
+            if (_jsFailure != null && _jsFailure.Value.At > DateTime.UtcNow - UpdateEvery)
+            {
+                throw new RepeatedProblemException(_jsFailure.Value.Message);
+            }
 
-            var archive = Path.Combine(_binFolder, asset);
-            Download($"https://github.com/denoland/deno/releases/latest/download/{asset}", archive);
+            try
+            {
+                return InstallJsRuntime();
+            }
+            catch (Exception ex)
+            {
+                _jsFailure = (DateTime.UtcNow, ex.Message);
+                throw;
+            }
+        }
+
+        private string InstallJsRuntime()
+        {
+            var (runtime, url) = JsRuntimeDownload() ?? throw new PlatformNotSupportedException(
+                "No JavaScript runtime found, so YouTube may only offer low quality formats. Install deno, node or bun.");
+
+            var local = Path.Combine(_binFolder, Exe(runtime));
+            var archive = local + ".zip";
+            Download(url, archive);
 
             try
             {
                 using var zip = ZipFile.OpenRead(archive);
-                var entry = zip.Entries.First(e => e.Name == Exe("deno"));
+                var entry = zip.Entries.First(e => e.Name == Exe(runtime));
                 entry.ExtractToFile(local, true);
                 MakeExecutable(local);
             }
@@ -223,7 +253,28 @@ namespace Encore.MusicVideos.Tools
                 File.Delete(archive);
             }
 
-            return $"deno:{local}";
+            // Bun's musl build needs libstdc++, which Docker images that run .NET already have
+            ProcessResult check;
+
+            try
+            {
+                check = ProcessRunner.Run(local, ["--version"], TimeSpan.FromSeconds(30), CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                check = new ProcessResult(-1, [], [ex.Message]);
+            }
+
+            if (check.ExitCode != 0)
+            {
+                File.Delete(local);
+                throw new PlatformNotSupportedException(
+                    $"{runtime} doesn't run here ({check.ErrorSummary()}), so YouTube may only offer low quality formats. " +
+                    "Install node (on Alpine-based Docker images: apk add nodejs).");
+            }
+
+            _logger.Info("Music videos: installed {0} {1}", runtime, string.Join(" ", check.Output).Trim());
+            return $"{runtime}:{local}";
         }
 
         private void Download(string url, string path)
@@ -305,15 +356,24 @@ namespace Encore.MusicVideos.Tools
             _ => null
         };
 
-        // Deno only publishes glibc builds for Linux, so musl (Alpine) needs a runtime from the package manager
-        private static string? DenoAsset() => (OsInfo.Os, Arch) switch
+        // Deno only publishes glibc builds for Linux, so musl (Alpine, as in most Lidarr Docker images) gets bun.
+        // Bun's baseline build also runs on older CPUs without AVX2, common in NAS boxes.
+        private static (string Runtime, string Url)? JsRuntimeDownload()
         {
-            (Os.Windows, Architecture.X64) => "deno-x86_64-pc-windows-msvc.zip",
-            (Os.Osx, Architecture.Arm64) => "deno-aarch64-apple-darwin.zip",
-            (Os.Osx, _) => "deno-x86_64-apple-darwin.zip",
-            (Os.Linux, Architecture.Arm64) => "deno-aarch64-unknown-linux-gnu.zip",
-            (Os.Linux, Architecture.X64) => "deno-x86_64-unknown-linux-gnu.zip",
-            _ => null
-        };
+            const string Deno = "https://github.com/denoland/deno/releases/latest/download/";
+            const string Bun = "https://github.com/oven-sh/bun/releases/latest/download/";
+
+            return (OsInfo.Os, Arch) switch
+            {
+                (Os.Windows, Architecture.X64) => ("deno", Deno + "deno-x86_64-pc-windows-msvc.zip"),
+                (Os.Osx, Architecture.Arm64) => ("deno", Deno + "deno-aarch64-apple-darwin.zip"),
+                (Os.Osx, _) => ("deno", Deno + "deno-x86_64-apple-darwin.zip"),
+                (Os.Linux, Architecture.Arm64) => ("deno", Deno + "deno-aarch64-unknown-linux-gnu.zip"),
+                (Os.Linux, Architecture.X64) => ("deno", Deno + "deno-x86_64-unknown-linux-gnu.zip"),
+                (Os.LinuxMusl, Architecture.Arm64) => ("bun", Bun + "bun-linux-aarch64-musl.zip"),
+                (Os.LinuxMusl, Architecture.X64) => ("bun", Bun + "bun-linux-x64-musl-baseline.zip"),
+                _ => null
+            };
+        }
     }
 }
